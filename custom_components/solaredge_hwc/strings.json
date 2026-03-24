@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "reconfigure": {
+        "title": "SolarEdge HWC – Cookie erneuern",
+        "description": "Neues Cookie für Site **{site_id}** / Gerät **{device_id}** eingeben.\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Anfrage-Header → `Cookie:`-Wert vollständig kopieren\n4. Hier einfügen",
+        "data": {
+          "cookie": "Browser-Cookie (vollständiger Cookie-Header-Wert)"
+        },
+        "data_description": {
+          "cookie": "Den gesamten Cookie-Header-Wert aus den Browser-DevTools einfügen"
+        }
+      },
+      "user": {
+        "title": "SolarEdge Hot Water Controller",
+        "description": "Connect to your SolarEdge Hot Water Controller. You need your **Site ID**, **Device ID** and a **browser session cookie** from the SolarEdge monitoring portal.\n\n**How to get the Device ID:**\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. Navigate to your site → Smart Energy → Hot Water\n3. Press F12 → Network tab → reload the page\n4. Look for a request to `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`\n5. Use the numbers: Site ID = XXXXXX, Device ID = YYYYYYYY\n\n**How to get the Cookie:**\n1. In F12 → Network → click any request to monitoring.solaredge.com\n2. In the request headers, find the `Cookie:` header\n3. Copy the entire value (everything after `Cookie: `)",
+        "data": {
+          "site_id": "Site ID",
+          "device_id": "Device ID",
+          "cookie": "Browser Session Cookie",
+          "scan_interval": "Update interval (seconds)",
+          "timeout": "Request timeout (seconds)"
+        },
+        "data_description": {
+          "site_id": "Numeric ID from the monitoring URL: .../site/XXXXXXX/...",
+          "device_id": "Numeric device ID from the network request URL",
+          "cookie": "Full Cookie header value from browser DevTools (F12 → Network → request headers → Cookie)",
+          "scan_interval": "How often to poll the API (min. 30 s, recommended 60 s)",
+          "timeout": "Max. seconds to wait for an API response"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the SolarEdge API. Check your internet connection.",
+      "invalid_auth": "Cookie is invalid or has expired. Please copy a fresh cookie from your browser.",
+      "invalid_response": "Unexpected API response. Verify that Site ID and Device ID are correct.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This SolarEdge Hot Water Controller is already configured.",
+      "reconfigure_successful": "Cookie successfully updated. The integration has been reloaded."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SolarEdge HWC – Update Configuration",
+        "description": "**Update the browser cookie** when it has expired (typically every 7–14 days).\n\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. Press F12 → Network → click any request to the site\n3. Copy the full value of the `Cookie:` request header\n4. Paste it in the field below\n\nLeave the cookie field **empty** to keep the current cookie.",
+        "data": {
+          "cookie": "New Browser Cookie (leave blank to keep current)",
+          "scan_interval": "Update interval (seconds)",
+          "timeout": "Request timeout (seconds)"
+        },
+        "data_description": {
+          "cookie": "Paste the full Cookie header value. Leave blank to keep the existing cookie.",
+          "scan_interval": "How often to poll the API (min. 30 s)",
+          "timeout": "Max. seconds to wait for an API response"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to SolarEdge API with the provided cookie.",
+      "invalid_auth": "The new cookie is invalid or expired. Please copy a fresh cookie from your browser.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant logs."
+    }
+  }
+}

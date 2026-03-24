@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "reconfigure": {
+        "title": "SolarEdge HWC – Cookie erneuern",
+        "description": "Neues Cookie für Site **{site_id}** / Gerät **{device_id}** eingeben.\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Anfrage-Header → `Cookie:`-Wert vollständig kopieren\n4. Hier einfügen",
+        "data": {
+          "cookie": "Browser-Cookie (vollständiger Cookie-Header-Wert)"
+        },
+        "data_description": {
+          "cookie": "Den gesamten Cookie-Header-Wert aus den Browser-DevTools einfügen"
+        }
+      },
+      "user": {
+        "title": "SolarEdge Warmwasser-Controller",
+        "description": "Verbindung zu deinem SolarEdge Warmwasser-Controller herstellen. Du benötigst deine **Site-ID**, **Geräte-ID** und ein **Browser-Session-Cookie** vom SolarEdge Monitoring-Portal.\n\n**So findest du die Geräte-ID:**\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. Navigiere zu deiner Anlage → Smart Energy → Warmwasser\n3. Drücke F12 → Netzwerk-Tab → Seite neu laden\n4. Suche eine Anfrage an `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`\n5. XXXXXX = Site-ID, YYYYYYYY = Geräte-ID\n\n**So holst du dir das Cookie:**\n1. F12 → Netzwerk → eine Anfrage an monitoring.solaredge.com anklicken\n2. Im Abschnitt \"Anfrage-Header\" den `Cookie:`-Header finden\n3. Den **gesamten Wert** kopieren",
+        "data": {
+          "site_id": "Site-ID",
+          "device_id": "Geräte-ID",
+          "cookie": "Browser-Session-Cookie",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "timeout": "Anfrage-Timeout (Sekunden)"
+        },
+        "data_description": {
+          "site_id": "Numerische ID aus der Monitoring-URL: .../site/XXXXXXX/...",
+          "device_id": "Numerische Geräte-ID aus der Netzwerkanfrage-URL",
+          "cookie": "Vollständiger Cookie-Header-Wert aus den Browser-DevTools (F12 → Netzwerk → Anfrage-Header → Cookie)",
+          "scan_interval": "Wie oft die API abgefragt wird (mind. 30 s, empfohlen 60 s)",
+          "timeout": "Maximale Wartezeit für eine API-Antwort in Sekunden"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zur SolarEdge API fehlgeschlagen. Bitte Internetverbindung prüfen.",
+      "invalid_auth": "Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
+      "invalid_response": "Unerwartete API-Antwort. Site-ID und Geräte-ID überprüfen.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte die Home Assistant Logs prüfen."
+    },
+    "abort": {
+      "already_configured": "Dieser SolarEdge Warmwasser-Controller ist bereits konfiguriert.",
+      "reconfigure_successful": "Cookie erfolgreich aktualisiert. Die Integration wurde neu geladen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SolarEdge HWC – Konfiguration aktualisieren",
+        "description": "**Browser-Cookie erneuern**, wenn es abgelaufen ist (typischerweise alle 7–14 Tage).\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk → eine Anfrage zur Seite anklicken\n3. Den vollständigen Wert des `Cookie:`-Anfrage-Headers kopieren\n4. Hier einfügen\n\nDas Cookie-Feld **leer lassen**, um das aktuelle Cookie beizubehalten.",
+        "data": {
+          "cookie": "Neues Browser-Cookie (leer lassen zum Beibehalten)",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "timeout": "Anfrage-Timeout (Sekunden)"
+        },
+        "data_description": {
+          "cookie": "Vollständigen Cookie-Header-Wert einfügen. Leer lassen, um das vorhandene Cookie zu behalten.",
+          "scan_interval": "Wie oft die API abgefragt wird (mind. 30 s)",
+          "timeout": "Maximale Wartezeit für eine API-Antwort in Sekunden"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zur SolarEdge API mit dem angegebenen Cookie fehlgeschlagen.",
+      "invalid_auth": "Das neue Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte die Home Assistant Logs prüfen."
+    }
+  }
+}
