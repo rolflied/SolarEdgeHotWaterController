@@ -2,6 +2,5 @@
   "name": "SolarEdge Hot Water Controller",
   "filename": "solaredge_hwc.zip",
   "domains": ["sensor", "binary_sensor"],
-  "country": ["DE", "AT", "CH"],
-  "render_readme": false
+  "render_readme": true
 }

@@ -13,7 +13,7 @@ CONF_TIMEOUT = "timeout"
 # Default values
 DEFAULT_SCAN_INTERVAL = 60
 DEFAULT_TIMEOUT = 30
-DEFAULT_NAME = "SolarEdge Warmwasser-Controller"
+DEFAULT_NAME = "SolarEdge Hot Water Controller"
 
 # API
 API_BASE_URL = "https://monitoring.solaredge.com"

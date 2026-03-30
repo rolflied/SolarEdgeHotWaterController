@@ -63,5 +63,32 @@
       "invalid_auth": "Das neue Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte die Home Assistant Logs prüfen."
     }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Leistung"
+      },
+      "heating_level": {
+        "name": "Heizstufe"
+      },
+      "activation_mode": {
+        "name": "Aktivierungsmodus"
+      },
+      "device_status": {
+        "name": "Gerätestatus"
+      },
+      "total_energy": {
+        "name": "Gesamtenergie"
+      }
+    },
+    "binary_sensor": {
+      "heating_active": {
+        "name": "Heizung aktiv"
+      },
+      "device_online": {
+        "name": "Gerät online"
+      }
+    }
   }
 }

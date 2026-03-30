@@ -1,76 +1,95 @@
 # SolarEdge Hot Water Controller – Home Assistant Integration
 
-Custom Integration für Home Assistant, um einen SolarEdge Warmwasser-Controller (HWC) über das SolarEdge Monitoring-Portal auszulesen.
+> **Disclaimer:** This is an **unofficial**, community-maintained integration and is **not affiliated with, endorsed by, or supported by SolarEdge Technologies**. Use at your own risk.
 
-## Voraussetzungen
+Custom integration for Home Assistant to read data from a SolarEdge Hot Water Controller (HWC) via the SolarEdge monitoring portal.
 
-- Home Assistant (empfohlen: 2024.12+)
-- Ein SolarEdge-Konto mit Zugriff auf den Warmwasser-Controller
-- Site-ID und Geräte-ID aus dem SolarEdge Monitoring-Portal
-- Browser-Cookie-String (siehe unten)
+The integration UI is available in **English** (default) and **German**.
+
+## Prerequisites
+
+- Home Assistant (recommended: 2024.12+)
+- A SolarEdge account with access to the Hot Water Controller
+- Site ID and Device ID from the SolarEdge monitoring portal
+- Browser cookie string (see below)
 
 ## Installation
 
-### Manuell
+### Manual
 
-1. Den Ordner `custom_components/solaredge_hwc/` in den `custom_components/`-Ordner deines Home Assistant kopieren.
-2. Home Assistant neu starten.
-3. In der HA-Oberfläche: **Einstellungen → Integrationen → Integration hinzufügen → SolarEdge Hot Water Controller**
+1. Copy the `custom_components/solaredge_hwc/` folder into your Home Assistant `custom_components/` directory.
+2. Restart Home Assistant.
+3. In the HA UI: **Settings → Integrations → Add Integration → SolarEdge Hot Water Controller**
 
-### HACS (manuell als benutzerdefiniertes Repository)
+### HACS (custom repository)
 
-1. HACS öffnen → Drei-Punkte-Menü → **Benutzerdefinierte Repositories**
-2. URL dieses Repositories eintragen, Kategorie: **Integration**
-3. Integration installieren und HA neu starten
+1. Open HACS → three-dot menu → **Custom Repositories**
+2. Enter this repository URL, category: **Integration**
+3. Install the integration and restart Home Assistant
 
-## Konfiguration
+## Configuration
 
-Bei der Einrichtung werden folgende Felder abgefragt:
+The setup flow asks for the following fields:
 
-| Feld | Beschreibung |
+| Field | Description |
+|-------|-------------|
+| **Site ID** | Numeric ID of your site (from the URL in the SolarEdge portal) |
+| **Device ID** | Numeric ID of the HWC device |
+| **Cookie** | Full browser cookie string (see below) |
+| **Update interval** | Seconds between API polls (default: 60, min: 30, max: 600) |
+| **Timeout** | Seconds until connection timeout (default: 30) |
+
+### How to get the cookie
+
+Since SolarEdge does not provide an official API with key-based authentication, a browser session cookie is required:
+
+1. Log in to [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser
+2. Navigate to your device page: **Smart Energy → Hot Water**
+3. Open developer tools (F12) → **Network** tab
+4. Reload the page, select a request to `monitoring.solaredge.com`
+5. In the request headers, copy the full value of the `Cookie:` header
+
+> **Note:** The cookie expires after some time. When authentication fails, Home Assistant will show a banner automatically. You can update the cookie under **Settings → Integrations → SolarEdge HWC → Configure**.
+
+## Provided entities
+
+### Sensors
+
+| Name | Description | Unit |
+|------|-------------|------|
+| Power | Current heating power | W |
+| Heating level | Current heating level / percentage | % |
+| Activation mode | MANUAL / AUTO / SMART_ENERGY / SCHEDULE | – |
+| Device status | ONLINE / OFFLINE / ERROR | – |
+| Total energy | Total consumed energy | Wh |
+
+### Binary sensors
+
+| Name | Description |
 |------|-------------|
-| **Site-ID** | Numerische ID deiner Anlage (aus der URL im SolarEdge-Portal) |
-| **Geräte-ID** | Numerische ID des HWC-Geräts |
-| **Cookie** | Vollständiger Browser-Cookie-String (siehe unten) |
-| **Abfrageintervall** | Sekunden zwischen API-Abfragen (Standard: 60, Min: 30, Max: 600) |
-| **Timeout** | Sekunden bis Verbindungs-Timeout (Standard: 30) |
+| Heating active | `true` when power > 10 W |
+| Device online | `true` when device status is ONLINE |
 
-### Cookie ermitteln
+## Updating the cookie
 
-Da SolarEdge keine offizielle API mit Key-Authentifizierung anbietet, wird der Browser-Session-Cookie benötigt:
+Go to **Settings → Integrations → SolarEdge HWC → Configure** to enter a new cookie. Leave the cookie field empty to keep the existing one.
 
-1. Im Browser auf [monitoring.solaredge.com](https://monitoring.solaredge.com) einloggen
-2. Zur Seite deines Geräts navigieren: **Smart Energy → Hot Water**
-3. Entwicklertools öffnen (F12) → **Netzwerk**-Tab
-4. Seite neu laden, einen Request zu `monitoring.solaredge.com` auswählen
-5. Im Request-Header den kompletten Wert des `Cookie:`-Headers kopieren
+## Notes
 
-> **Hinweis:** Der Cookie läuft nach einiger Zeit ab. Bei Authentifizierungsfehlern zeigt HA automatisch ein Banner an. Den Cookie kannst du dann unter **Einstellungen → Integrationen → SolarEdge HWC → Konfigurieren** aktualisieren.
+- This integration uses the unofficial SolarEdge monitoring API – changes by SolarEdge may affect functionality.
+- Do not set the polling interval too low to avoid being rate-limited by SolarEdge (recommended: >= 60 seconds).
 
-## Bereitgestellte Entitäten
+---
 
-### Sensoren
+## Deutsche Anleitung
 
-| Name | Beschreibung | Einheit |
-|------|-------------|---------|
-| SolarEdge HWC Leistung | Aktuelle Heizleistung | W |
-| SolarEdge HWC Heizstufe | Aktueller Füllstand / Heizstufe | % |
-| SolarEdge HWC Aktivierungsmodus | MANUAL / AUTO / SMART_ENERGY / SCHEDULE | – |
-| SolarEdge HWC Gerätestatus | ONLINE / OFFLINE / ERROR | – |
-| SolarEdge HWC Gesamtenergie | Gesamte verbrauchte Energie | kWh |
+Eine vollständige deutsche Übersetzung der Benutzeroberfläche ist in der Integration enthalten. Wenn Home Assistant auf Deutsch eingestellt ist, werden alle Konfigurationsdialoge und Entitätsnamen automatisch auf Deutsch angezeigt.
 
-### Binärsensoren
+### Kurzanleitung
 
-| Name | Beschreibung |
-|------|-------------|
-| SolarEdge HWC Heizung aktiv | `true` wenn Leistung > 10 W |
-| SolarEdge HWC Gerät online | `true` wenn Gerätestatus ONLINE |
+1. Integration installieren (manuell oder über HACS als benutzerdefiniertes Repository)
+2. **Einstellungen → Integrationen → Integration hinzufügen → SolarEdge Hot Water Controller**
+3. Site-ID, Geräte-ID und Browser-Cookie eingeben
+4. Cookie bei Ablauf unter **Einstellungen → Integrationen → SolarEdge HWC → Konfigurieren** erneuern
 
-## Cookie aktualisieren
-
-Unter **Einstellungen → Integrationen → SolarEdge HWC → Konfigurieren** kann ein neues Cookie eingegeben werden. Das Cookie-Feld leer lassen, um das bestehende Cookie beizubehalten.
-
-## Hinweise
-
-- Die Integration nutzt die inoffizielle SolarEdge Monitoring API – Änderungen seitens SolarEdge können die Funktion beeinträchtigen.
-- Abfrageintervall nicht zu kurz wählen, um eine Sperrung durch SolarEdge zu vermeiden (Empfehlung: ≥ 60 Sekunden).
+> **Hinweis:** Dies ist eine **inoffizielle** Integration und steht in **keiner Verbindung zu SolarEdge Technologies**. Nutzung auf eigene Verantwortung.
