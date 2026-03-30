@@ -168,7 +168,7 @@ class SolarEdgeHWCConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ):
         """
-        Handle 'Neu konfigurieren' (Reconfigure) from the three-dot menu.
+        Handle 'Reconfigure' from the three-dot menu.
 
         Lets the user paste a new cookie without having to remove and
         re-add the integration.
@@ -226,7 +226,7 @@ class SolarEdgeHWCOptionsFlow(config_entries.OptionsFlow):
     Options flow for SolarEdge Hot Water Controller.
 
     Allows updating the browser cookie, scan interval, and timeout
-    directly via the Home Assistant UI (Settings → Integrations → Konfigurieren).
+    directly via the Home Assistant UI (Settings → Integrations → Configure).
 
     IMPORTANT: No __init__ override — HA 2024.12+ sets self.config_entry
     automatically. Defining __init__(config_entry) here causes a 500 error.

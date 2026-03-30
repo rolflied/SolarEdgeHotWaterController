@@ -51,6 +51,8 @@ async def async_setup_entry(
 class SolarEdgeHWCBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
     """Base class for SolarEdge HWC binary sensors."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         coordinator: SolarEdgeHWCCoordinator,
@@ -61,7 +63,7 @@ class SolarEdgeHWCBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
         self._entry = entry
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.device_id)},
-            "name": "SolarEdge Warmwasser-Controller",
+            "name": "SolarEdge Hot Water Controller",
             "manufacturer": "SolarEdge",
             "model": "Home Hot Water Controller",
             "configuration_url": (
@@ -77,7 +79,7 @@ class SolarEdgeHWCBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
 
 
 # ---------------------------------------------------------------------------
-# Heating active  (Heizung aktiv)
+# Heating active
 # ---------------------------------------------------------------------------
 
 class HWCHeatingActiveSensor(SolarEdgeHWCBinarySensorBase):
@@ -88,7 +90,7 @@ class HWCHeatingActiveSensor(SolarEdgeHWCBinarySensorBase):
     False → idle / off
     """
 
-    _attr_name = "SolarEdge HWC Heizung aktiv"
+    _attr_translation_key = "heating_active"
     _attr_unique_id = "se_hwc_heating_active"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
 
@@ -106,7 +108,7 @@ class HWCHeatingActiveSensor(SolarEdgeHWCBinarySensorBase):
 
 
 # ---------------------------------------------------------------------------
-# Device online  (Gerät online)
+# Device online
 # ---------------------------------------------------------------------------
 
 class HWCDeviceOnlineSensor(SolarEdgeHWCBinarySensorBase):
@@ -117,7 +119,7 @@ class HWCDeviceOnlineSensor(SolarEdgeHWCBinarySensorBase):
     False → OFFLINE, DISCONNECTED, or any other status
     """
 
-    _attr_name = "SolarEdge HWC Gerät online"
+    _attr_translation_key = "device_online"
     _attr_unique_id = "se_hwc_device_online"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 

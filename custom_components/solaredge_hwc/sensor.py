@@ -71,6 +71,8 @@ async def async_setup_entry(
 class SolarEdgeHWCSensorBase(CoordinatorEntity, SensorEntity):
     """Base class for all SolarEdge HWC sensors."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         coordinator: SolarEdgeHWCCoordinator,
@@ -81,7 +83,7 @@ class SolarEdgeHWCSensorBase(CoordinatorEntity, SensorEntity):
         self._entry = entry
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.device_id)},
-            "name": "SolarEdge Warmwasser-Controller",
+            "name": "SolarEdge Hot Water Controller",
             "manufacturer": "SolarEdge",
             "model": "Home Hot Water Controller",
             "configuration_url": (
@@ -97,13 +99,13 @@ class SolarEdgeHWCSensorBase(CoordinatorEntity, SensorEntity):
 
 
 # ---------------------------------------------------------------------------
-# Power sensor  (Leistung)
+# Power sensor
 # ---------------------------------------------------------------------------
 
 class HWCPowerSensor(SolarEdgeHWCSensorBase):
     """Current electrical power consumption of the hot water controller."""
 
-    _attr_name = "SolarEdge HWC Leistung"
+    _attr_translation_key = "power"
     _attr_unique_id = "se_hwc_power_active"
     _attr_device_class = SensorDeviceClass.POWER
     _attr_native_unit_of_measurement = UnitOfPower.WATT
@@ -147,13 +149,13 @@ class HWCPowerSensor(SolarEdgeHWCSensorBase):
 
 
 # ---------------------------------------------------------------------------
-# Level sensor  (Füllstand / Heizstufe)
+# Level sensor
 # ---------------------------------------------------------------------------
 
 class HWCLevelSensor(SolarEdgeHWCSensorBase):
     """Heating level percentage (how much of the target temperature is reached)."""
 
-    _attr_name = "SolarEdge HWC Heizstufe"
+    _attr_translation_key = "heating_level"
     _attr_unique_id = "se_hwc_level_percent"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -177,22 +179,21 @@ class HWCLevelSensor(SolarEdgeHWCSensorBase):
 
 
 # ---------------------------------------------------------------------------
-# Activation mode sensor  (Aktivierungsmodus)
+# Activation mode sensor
 # ---------------------------------------------------------------------------
 
 class HWCActivationModeSensor(SolarEdgeHWCSensorBase):
     """Current activation / operating mode of the controller."""
 
-    _attr_name = "SolarEdge HWC Aktivierungsmodus"
+    _attr_translation_key = "activation_mode"
     _attr_unique_id = "se_hwc_activation_mode"
 
-    # Human-readable German translations for known mode values
     _MODE_LABELS: dict[str, str] = {
-        "MANUAL": "Manuell",
-        "AUTO": "Automatisch",
+        "MANUAL": "Manual",
+        "AUTO": "Automatic",
         "SMART_ENERGY": "Smart Energy",
-        "SCHEDULE": "Zeitplan",
-        "OFF": "Aus",
+        "SCHEDULE": "Schedule",
+        "OFF": "Off",
     }
 
     @property
@@ -221,7 +222,7 @@ class HWCActivationModeSensor(SolarEdgeHWCSensorBase):
 
 
 # ---------------------------------------------------------------------------
-# Device status sensor  (Gerätestatus)
+# Device status sensor
 # ---------------------------------------------------------------------------
 
 class HWCDeviceStatusSensor(SolarEdgeHWCSensorBase):
@@ -232,16 +233,16 @@ class HWCDeviceStatusSensor(SolarEdgeHWCSensorBase):
     that users can inspect the full API response in the entity panel.
     """
 
-    _attr_name = "SolarEdge HWC Gerätestatus"
+    _attr_translation_key = "device_status"
     _attr_unique_id = "se_hwc_device_status"
 
     _STATUS_LABELS: dict[str, str] = {
         "ONLINE": "Online",
         "OFFLINE": "Offline",
-        "ERROR": "Fehler",
-        "CONNECTED": "Verbunden",
-        "DISCONNECTED": "Getrennt",
-        "COMMUNICATION_ERROR": "Kommunikationsfehler",
+        "ERROR": "Error",
+        "CONNECTED": "Connected",
+        "DISCONNECTED": "Disconnected",
+        "COMMUNICATION_ERROR": "Communication Error",
     }
 
     @property
@@ -284,7 +285,7 @@ class HWCDeviceStatusSensor(SolarEdgeHWCSensorBase):
 
 
 # ---------------------------------------------------------------------------
-# Total energy sensor  (Gesamtenergie – für Langzeitstatistiken / Energiedashboard)
+# Total energy sensor
 # ---------------------------------------------------------------------------
 
 class HWCTotalEnergySensor(SolarEdgeHWCSensorBase):
@@ -299,7 +300,7 @@ class HWCTotalEnergySensor(SolarEdgeHWCSensorBase):
     It will show as "unavailable" if the field is absent.
     """
 
-    _attr_name = "SolarEdge HWC Gesamtenergie"
+    _attr_translation_key = "total_energy"
     _attr_unique_id = "se_hwc_total_energy"
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR

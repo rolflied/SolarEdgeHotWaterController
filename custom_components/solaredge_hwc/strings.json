@@ -2,13 +2,13 @@
   "config": {
     "step": {
       "reconfigure": {
-        "title": "SolarEdge HWC – Cookie erneuern",
-        "description": "Neues Cookie für Site **{site_id}** / Gerät **{device_id}** eingeben.\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Anfrage-Header → `Cookie:`-Wert vollständig kopieren\n4. Hier einfügen",
+        "title": "SolarEdge HWC – Renew Cookie",
+        "description": "Enter a new cookie for site **{site_id}** / device **{device_id}**.\n\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. F12 → Network tab → click any request\n3. Request headers → copy the full `Cookie:` value\n4. Paste it below",
         "data": {
-          "cookie": "Browser-Cookie (vollständiger Cookie-Header-Wert)"
+          "cookie": "Browser Cookie (full Cookie header value)"
         },
         "data_description": {
-          "cookie": "Den gesamten Cookie-Header-Wert aus den Browser-DevTools einfügen"
+          "cookie": "Paste the entire Cookie header value from browser DevTools"
         }
       },
       "user": {
@@ -62,6 +62,33 @@
       "cannot_connect": "Cannot connect to SolarEdge API with the provided cookie.",
       "invalid_auth": "The new cookie is invalid or expired. Please copy a fresh cookie from your browser.",
       "unknown": "An unexpected error occurred. Check the Home Assistant logs."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "heating_level": {
+        "name": "Heating level"
+      },
+      "activation_mode": {
+        "name": "Activation mode"
+      },
+      "device_status": {
+        "name": "Device status"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      }
+    },
+    "binary_sensor": {
+      "heating_active": {
+        "name": "Heating active"
+      },
+      "device_online": {
+        "name": "Device online"
+      }
     }
   }
 }

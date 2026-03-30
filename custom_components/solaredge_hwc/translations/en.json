@@ -63,5 +63,32 @@
       "invalid_auth": "The new cookie is invalid or expired. Please copy a fresh cookie from your browser.",
       "unknown": "An unexpected error occurred. Check the Home Assistant logs."
     }
+  },
+  "entity": {
+    "sensor": {
+      "power": {
+        "name": "Power"
+      },
+      "heating_level": {
+        "name": "Heating level"
+      },
+      "activation_mode": {
+        "name": "Activation mode"
+      },
+      "device_status": {
+        "name": "Device status"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      }
+    },
+    "binary_sensor": {
+      "heating_active": {
+        "name": "Heating active"
+      },
+      "device_online": {
+        "name": "Device online"
+      }
+    }
   }
 }
