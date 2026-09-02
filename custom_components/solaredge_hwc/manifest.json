@@ -4,9 +4,10 @@
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/home-assistant/core",
+  "documentation": "https://github.com/rolflied/SolarEdgeHotWaterController",
   "integration_type": "device",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/rolflied/SolarEdgeHotWaterController/issues",
   "requirements": [],
-  "version": "1.1.0"
+  "version": "1.2.0"
 }

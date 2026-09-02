@@ -15,6 +15,9 @@ DEFAULT_SCAN_INTERVAL = 60
 DEFAULT_TIMEOUT = 30
 DEFAULT_NAME = "SolarEdge Hot Water Controller"
 
+# Title used for newly created config entries
+ENTRY_TITLE_FORMAT = "SolarEdge HWC (Site {site_id})"
+
 # API
 API_BASE_URL = "https://monitoring.solaredge.com"
 API_HWC_ENDPOINT = "/services/m/so/load-device/site/{site_id}/device/{device_id}/state"
@@ -57,3 +60,4 @@ ERROR_AUTH_FAILED = "invalid_auth"
 ERROR_CANNOT_CONNECT = "cannot_connect"
 ERROR_INVALID_RESPONSE = "invalid_response"
 ERROR_UNKNOWN = "unknown"
+ERROR_ALREADY_CONFIGURED = "already_configured"

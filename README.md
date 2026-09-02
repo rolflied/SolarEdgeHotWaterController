@@ -8,7 +8,7 @@ The integration UI is available in **English** (default) and **German**.
 
 ## Prerequisites
 
-- Home Assistant (recommended: 2024.12+)
+- Home Assistant (recommended: 2024.12+, 2026.3+ for the integration icon)
 - A SolarEdge account with access to the Hot Water Controller
 - Site ID and Device ID from the SolarEdge monitoring portal
 - Browser cookie string (see below)
@@ -51,6 +51,8 @@ Since SolarEdge does not provide an official API with key-based authentication, 
 
 > **Note:** The cookie expires after some time. When authentication fails, Home Assistant will show a banner automatically. You can update the cookie under **Settings → Integrations → SolarEdge HWC → Configure**.
 
+All setup fields, including Site ID and Device ID, can be changed later; see [Changing the configuration](#changing-the-configuration).
+
 ## Provided entities
 
 ### Sensors
@@ -70,9 +72,21 @@ Since SolarEdge does not provide an official API with key-based authentication, 
 | Heating active | `true` when power > 10 W |
 | Device online | `true` when device status is ONLINE |
 
-## Updating the cookie
+## Changing the configuration
 
-Go to **Settings → Integrations → SolarEdge HWC → Configure** to enter a new cookie. Leave the cookie field empty to keep the existing one.
+Site ID, Device ID, cookie, update interval and timeout can all be changed after setup, either
+under **Settings → Integrations → SolarEdge HWC → Configure** or via **Reconfigure** in the
+three-dot menu of the integration entry. Leave the cookie field empty to keep the existing cookie.
+
+The new values are checked against the API before they are stored, so a typo in the Site ID or a
+cookie that has already expired is rejected right in the dialog.
+
+### After replacing the controller
+
+If the hardware was replaced, enter the new Site ID and Device ID in that dialog. The integration
+moves the existing device to the new ID instead of creating a second one, so all entities keep
+their entity IDs, their history and their long-term statistics, and dashboards and automations
+keep working unchanged.
 
 ## Notes
 
@@ -91,5 +105,12 @@ Eine vollständige deutsche Übersetzung der Benutzeroberfläche ist in der Inte
 2. **Einstellungen → Integrationen → Integration hinzufügen → SolarEdge Hot Water Controller**
 3. Site-ID, Geräte-ID und Browser-Cookie eingeben
 4. Cookie bei Ablauf unter **Einstellungen → Integrationen → SolarEdge HWC → Konfigurieren** erneuern
+
+### Gerät ausgetauscht
+
+Site-ID und Geräte-ID lassen sich nachträglich im selben Dialog ändern, ebenso über **Neu
+konfigurieren** im Drei-Punkte-Menü. Die Integration übernimmt das vorhandene Gerät auf die neue
+ID, statt ein zweites anzulegen. Die Entitäten behalten dadurch ihre Entitäts-IDs, ihren Verlauf
+und ihre Langzeitstatistiken, Dashboards und Automatisierungen laufen unverändert weiter.
 
 > **Hinweis:** Dies ist eine **inoffizielle** Integration und steht in **keiner Verbindung zu SolarEdge Technologies**. Nutzung auf eigene Verantwortung.

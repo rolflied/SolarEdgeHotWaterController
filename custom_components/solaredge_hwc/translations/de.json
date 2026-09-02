@@ -2,13 +2,21 @@
   "config": {
     "step": {
       "reconfigure": {
-        "title": "SolarEdge HWC – Cookie erneuern",
-        "description": "Neues Cookie für Site **{site_id}** / Gerät **{device_id}** eingeben.\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Anfrage-Header → `Cookie:`-Wert vollständig kopieren\n4. Hier einfügen",
+        "title": "SolarEdge HWC – Konfiguration ändern",
+        "description": "Aktuell konfiguriert: Site **{site_id}**, Gerät **{device_id}**.\n\nHier kannst du ein neues Cookie hinterlegen oder **Site-ID** und **Geräte-ID** ändern, wenn der Controller ausgetauscht wurde. Die Entitäten behalten ihre Entitäts-IDs und ihren Verlauf.\n\n**So holst du dir ein frisches Cookie:**\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Im Abschnitt „Anfrage-Header“ den vollständigen `Cookie:`-Wert kopieren\n\nDas Cookie-Feld leer lassen, um das aktuelle Cookie zu behalten.",
         "data": {
-          "cookie": "Browser-Cookie (vollständiger Cookie-Header-Wert)"
+          "site_id": "Site-ID",
+          "device_id": "Geräte-ID",
+          "cookie": "Neues Browser-Cookie (leer lassen zum Beibehalten)",
+          "scan_interval": "Aktualisierungsintervall (Sekunden)",
+          "timeout": "Anfrage-Timeout (Sekunden)"
         },
         "data_description": {
-          "cookie": "Den gesamten Cookie-Header-Wert aus den Browser-DevTools einfügen"
+          "site_id": "Numerische ID aus der Monitoring-URL: .../site/XXXXXXX/...",
+          "device_id": "Numerische Geräte-ID. Nach einem Gerätetausch hier die neue ID eintragen.",
+          "cookie": "Vollständigen Cookie-Header-Wert einfügen. Leer lassen, um das vorhandene Cookie zu behalten.",
+          "scan_interval": "Wie oft die API abgefragt wird (mind. 30 s, empfohlen 60 s)",
+          "timeout": "Maximale Wartezeit für eine API-Antwort in Sekunden"
         }
       },
       "user": {
@@ -34,33 +42,40 @@
       "cannot_connect": "Verbindung zur SolarEdge API fehlgeschlagen. Bitte Internetverbindung prüfen.",
       "invalid_auth": "Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
       "invalid_response": "Unerwartete API-Antwort. Site-ID und Geräte-ID überprüfen.",
+      "already_configured": "Diese Kombination aus Site-ID und Geräte-ID wird bereits von einem anderen Eintrag verwendet.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte die Home Assistant Logs prüfen."
     },
     "abort": {
       "already_configured": "Dieser SolarEdge Warmwasser-Controller ist bereits konfiguriert.",
-      "reconfigure_successful": "Cookie erfolgreich aktualisiert. Die Integration wurde neu geladen."
+      "reconfigure_successful": "Konfiguration aktualisiert. Die Integration wurde neu geladen."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "SolarEdge HWC – Konfiguration aktualisieren",
-        "description": "**Browser-Cookie erneuern**, wenn es abgelaufen ist (typischerweise alle 7–14 Tage).\n\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk → eine Anfrage zur Seite anklicken\n3. Den vollständigen Wert des `Cookie:`-Anfrage-Headers kopieren\n4. Hier einfügen\n\nDas Cookie-Feld **leer lassen**, um das aktuelle Cookie beizubehalten.",
+        "description": "Hier kannst du ein neues Cookie hinterlegen oder **Site-ID** und **Geräte-ID** ändern, wenn der Controller ausgetauscht wurde. Die Entitäten behalten ihre Entitäts-IDs und ihren Verlauf.\n\n**So holst du dir ein frisches Cookie:**\n1. Öffne [monitoring.solaredge.com](https://monitoring.solaredge.com) im Browser\n2. F12 → Netzwerk-Tab → eine Anfrage anklicken\n3. Im Abschnitt „Anfrage-Header“ den vollständigen `Cookie:`-Wert kopieren\n\nDas Cookie-Feld leer lassen, um das aktuelle Cookie zu behalten.",
         "data": {
+          "site_id": "Site-ID",
+          "device_id": "Geräte-ID",
           "cookie": "Neues Browser-Cookie (leer lassen zum Beibehalten)",
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "timeout": "Anfrage-Timeout (Sekunden)"
         },
         "data_description": {
+          "site_id": "Numerische ID aus der Monitoring-URL: .../site/XXXXXXX/...",
+          "device_id": "Numerische Geräte-ID. Nach einem Gerätetausch hier die neue ID eintragen.",
           "cookie": "Vollständigen Cookie-Header-Wert einfügen. Leer lassen, um das vorhandene Cookie zu behalten.",
-          "scan_interval": "Wie oft die API abgefragt wird (mind. 30 s)",
+          "scan_interval": "Wie oft die API abgefragt wird (mind. 30 s, empfohlen 60 s)",
           "timeout": "Maximale Wartezeit für eine API-Antwort in Sekunden"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zur SolarEdge API mit dem angegebenen Cookie fehlgeschlagen.",
-      "invalid_auth": "Das neue Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
+      "cannot_connect": "Verbindung zur SolarEdge API mit den angegebenen Daten fehlgeschlagen.",
+      "invalid_auth": "Das Cookie ist ungültig oder abgelaufen. Bitte ein frisches Cookie aus dem Browser kopieren.",
+      "invalid_response": "Unerwartete API-Antwort. Site-ID und Geräte-ID überprüfen.",
+      "already_configured": "Diese Kombination aus Site-ID und Geräte-ID wird bereits von einem anderen Eintrag verwendet.",
       "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte die Home Assistant Logs prüfen."
     }
   },
