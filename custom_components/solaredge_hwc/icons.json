@@ -1,0 +1,144 @@
+{
+  "entity": {
+    "sensor": {
+      "heating_level": {
+        "default": "mdi:gauge",
+        "range": {
+          "0": "mdi:gauge-empty",
+          "1": "mdi:gauge-low",
+          "50": "mdi:gauge",
+          "100": "mdi:gauge-full"
+        }
+      },
+      "activation_mode": {
+        "default": "mdi:robot",
+        "state": {
+          "manual": "mdi:hand-back-left",
+          "schedule": "mdi:calendar-clock",
+          "smart_energy": "mdi:solar-power",
+          "off": "mdi:power-off"
+        }
+      },
+      "auto_off_reason": {
+        "default": "mdi:information-outline",
+        "state": {
+          "pending_excess_solar": "mdi:solar-power-variant-outline"
+        }
+      },
+      "schedule_type": {
+        "default": "mdi:calendar-sync"
+      },
+      "device_status": {
+        "default": "mdi:check-network"
+      },
+      "rated_power": {
+        "default": "mdi:flash"
+      },
+      "total_energy": {
+        "default": "mdi:lightning-bolt"
+      },
+      "next_schedule": {
+        "default": "mdi:calendar-clock"
+      },
+      "boost_end": {
+        "default": "mdi:timer-sand"
+      },
+      "water_temperature": {
+        "default": "mdi:thermometer-water",
+        "range": {
+          "0": "mdi:thermometer-low",
+          "40": "mdi:thermometer",
+          "60": "mdi:thermometer-high"
+        }
+      }
+    },
+    "binary_sensor": {
+      "heating_active": {
+        "default": "mdi:water-boiler-off",
+        "state": {
+          "on": "mdi:water-boiler"
+        }
+      },
+      "excess_pv": {
+        "default": "mdi:solar-power-variant-outline",
+        "state": {
+          "on": "mdi:solar-power-variant"
+        }
+      },
+      "schedule_enabled": {
+        "default": "mdi:calendar-remove",
+        "state": {
+          "on": "mdi:calendar-check"
+        }
+      },
+      "temperature_limit_active": {
+        "default": "mdi:thermometer",
+        "state": {
+          "on": "mdi:thermometer-alert"
+        }
+      }
+    },
+    "select": {
+      "operation_mode": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "auto": "mdi:water-boiler-auto",
+          "on": "mdi:water-boiler",
+          "off": "mdi:water-boiler-off",
+          "schedule": "mdi:calendar-clock"
+        }
+      }
+    },
+    "switch": {
+      "manual_heating": {
+        "default": "mdi:water-boiler-off",
+        "state": {
+          "on": "mdi:water-boiler"
+        }
+      },
+      "temperature_limit": {
+        "default": "mdi:thermometer-off",
+        "state": {
+          "on": "mdi:thermometer-check"
+        }
+      }
+    },
+    "number": {
+      "manual_level": {
+        "default": "mdi:gauge",
+        "range": {
+          "0": "mdi:gauge-low",
+          "50": "mdi:gauge",
+          "100": "mdi:gauge-full"
+        }
+      },
+      "boost_duration": {
+        "default": "mdi:timer-outline"
+      }
+    },
+    "button": {
+      "boost": {
+        "default": "mdi:rocket-launch"
+      }
+    },
+    "water_heater": {
+      "hwc": {
+        "default": "mdi:water-boiler",
+        "state": {
+          "auto": "mdi:water-boiler-auto",
+          "on": "mdi:water-boiler",
+          "off": "mdi:water-boiler-off",
+          "schedule": "mdi:calendar-clock"
+        }
+      }
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "service": "mdi:water-boiler"
+    },
+    "boost": {
+      "service": "mdi:rocket-launch"
+    }
+  }
+}

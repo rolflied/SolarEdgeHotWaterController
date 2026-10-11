@@ -1,63 +1,122 @@
 """Constants for the SolarEdge Hot Water Controller integration."""
 
-DOMAIN = "solaredge_hwc"
-PLATFORMS = ["sensor", "binary_sensor"]
+from __future__ import annotations
 
+from datetime import timedelta
+from typing import Final
+
+from homeassistant.const import Platform
+
+DOMAIN: Final = "solaredge_hwc"
+PLATFORMS: Final = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.WATER_HEATER,
+]
+
+# ---------------------------------------------------------------------------
 # Configuration keys
-CONF_SITE_ID = "site_id"
-CONF_DEVICE_ID = "device_id"
-CONF_COOKIE = "cookie"
-CONF_SCAN_INTERVAL = "scan_interval"
-CONF_TIMEOUT = "timeout"
+# ---------------------------------------------------------------------------
+CONF_AUTH_TYPE: Final = "auth_type"
+CONF_SITE_ID: Final = "site_id"
+CONF_DEVICE_ID: Final = "device_id"
+CONF_COOKIE: Final = "cookie"
+CONF_SCAN_INTERVAL: Final = "scan_interval"
+CONF_TIMEOUT: Final = "timeout"
+CONF_SWITCH_OFF_MODE: Final = "switch_off_mode"
+CONF_TEMPERATURE_SENSOR: Final = "temperature_sensor"
+CONF_HYSTERESIS: Final = "hysteresis"
 
-# Default values
-DEFAULT_SCAN_INTERVAL = 60
-DEFAULT_TIMEOUT = 30
-DEFAULT_NAME = "SolarEdge Hot Water Controller"
+AUTH_CREDENTIALS: Final = "credentials"
+AUTH_COOKIE: Final = "cookie"
+
+# What the "Manual heating" switch does when it is turned off
+SWITCH_OFF_AUTO: Final = "auto"
+SWITCH_OFF_OFF: Final = "off"
+
+DEFAULT_SCAN_INTERVAL: Final = 60
+DEFAULT_TIMEOUT: Final = 30
+DEFAULT_SWITCH_OFF_MODE: Final = SWITCH_OFF_AUTO
+MIN_SCAN_INTERVAL: Final = 30
+MAX_SCAN_INTERVAL: Final = 600
+MIN_TIMEOUT: Final = 10
+MAX_TIMEOUT: Final = 120
+
+DEFAULT_NAME: Final = "SolarEdge Hot Water Controller"
+DEFAULT_MODEL: Final = "Home Hot Water Controller"
+MANUFACTURER: Final = "SolarEdge"
 
 # Title used for newly created config entries
-ENTRY_TITLE_FORMAT = "SolarEdge HWC (Site {site_id})"
+ENTRY_TITLE_FORMAT: Final = "SolarEdge HWC (Site {site_id})"
 
-# API
-API_BASE_URL = "https://monitoring.solaredge.com"
-API_HWC_ENDPOINT = "/services/m/so/load-device/site/{site_id}/device/{device_id}/state"
+# The static device info (model, rated power, schedules) changes rarely
+INFO_REFRESH_INTERVAL: Final = timedelta(minutes=15)
+# Delay before re-reading the state after a command, so the cloud has caught up
+POST_COMMAND_REFRESH_DELAY: Final = 5
 
-# Activation modes
-MODE_MANUAL = "MANUAL"
-MODE_AUTO = "AUTO"
-MODE_SMART_ENERGY = "SMART_ENERGY"
-MODE_SCHEDULE = "SCHEDULE"
+# ---------------------------------------------------------------------------
+# SolarEdge monitoring portal (unofficial, reverse engineered)
+# ---------------------------------------------------------------------------
+BASE_URL: Final = "https://monitoring.solaredge.com"
+LOGIN_BASE_URL: Final = "https://login.solaredge.com"
+OAUTH_CLIENT_ID: Final = "ugfnsujd3384sshcjehaphlh3"
+OAUTH_CALLBACK_URL: Final = f"{BASE_URL}/mfe/auth/callback"
+OAUTH_TOKEN_URL: Final = f"{LOGIN_BASE_URL}/oauth2/token"
 
-# Device status values
-STATUS_ONLINE = "ONLINE"
-STATUS_OFFLINE = "OFFLINE"
-STATUS_ERROR = "ERROR"
-STATUS_CONNECTED = "CONNECTED"
-STATUS_DISCONNECTED = "DISCONNECTED"
+PATH_DEVICE_STATE: Final = "/services/m/so/load-device/site/{site_id}/device/{device_id}/state"
+PATH_DEVICE_INFO: Final = "/services/m/so/load-device/site/{site_id}/device/{device_id}/info"
+PATH_DEVICES_LIST_INFO: Final = "/services/m/so/devices-list/site/{site_id}/info"
+PATH_ACTIVATION_STATE: Final = (
+    "/services/m/api/homeautomation/v1.0/{site_id}/devices/{device_id}/activationState"
+)
+
+USER_AGENT: Final = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+# Activation modes as used by the API
+API_MODE_AUTO: Final = "AUTO"
+API_MODE_MANUAL: Final = "MANUAL"
+API_MODE_SCHEDULE: Final = "SCHEDULE"
+
+# Operating modes offered to the user (select entity and actions)
+OPERATION_AUTO: Final = "auto"
+OPERATION_ON: Final = "on"
+OPERATION_OFF: Final = "off"
+OPERATION_SCHEDULE: Final = "schedule"
+OPERATION_MODES: Final = [OPERATION_AUTO, OPERATION_ON, OPERATION_OFF, OPERATION_SCHEDULE]
+
+# Status values that mean "the controller talks to the cloud"
+ONLINE_STATUSES: Final = frozenset({"ACTIVE", "ONLINE", "CONNECTED"})
 
 # Power threshold (W) above which heating is considered active
-HEATING_POWER_THRESHOLD_W = 10.0
+HEATING_POWER_THRESHOLD_W: Final = 10.0
 
-# Icons
-ICON_WATER_BOILER = "mdi:water-boiler"
-ICON_WATER_BOILER_OFF = "mdi:water-boiler-off"
-ICON_WATER_BOILER_AUTO = "mdi:water-boiler-auto"
-ICON_GAUGE = "mdi:gauge"
-ICON_GAUGE_EMPTY = "mdi:gauge-empty"
-ICON_LIGHTNING = "mdi:lightning-bolt"
-ICON_LIGHTNING_OFF = "mdi:lightning-bolt-outline"
-ICON_HAND = "mdi:hand-back-left"
-ICON_ROBOT = "mdi:robot"
-ICON_SOLAR_POWER = "mdi:solar-power"
-ICON_CHECK_NETWORK = "mdi:check-network"
-ICON_NETWORK_OFF = "mdi:network-off"
-ICON_THERMOMETER = "mdi:thermometer"
-ICON_FLASH = "mdi:flash"
-ICON_FLASH_OFF = "mdi:flash-off"
+# Boost / manual heating defaults
+DEFAULT_BOOST_DURATION_MIN: Final = 60
+DEFAULT_MANUAL_LEVEL: Final = 100
+MAX_BOOST_DURATION_MIN: Final = 1440
 
-# Error message keys (used internally in config flow)
-ERROR_AUTH_FAILED = "invalid_auth"
-ERROR_CANNOT_CONNECT = "cannot_connect"
-ERROR_INVALID_RESPONSE = "invalid_response"
-ERROR_UNKNOWN = "unknown"
-ERROR_ALREADY_CONFIGURED = "already_configured"
+# Temperature limit (°C / K)
+DEFAULT_TARGET_TEMPERATURE: Final = 60.0
+MIN_TARGET_TEMPERATURE: Final = 30.0
+MAX_TARGET_TEMPERATURE: Final = 85.0
+DEFAULT_HYSTERESIS: Final = 5.0
+MIN_HYSTERESIS: Final = 1.0
+MAX_HYSTERESIS: Final = 20.0
+
+# Power readings further apart than this are not integrated into energy
+MAX_ENERGY_INTEGRATION_GAP: Final = timedelta(minutes=15)
+
+# Actions
+SERVICE_SET_OPERATION_MODE: Final = "set_operation_mode"
+SERVICE_BOOST: Final = "boost"
+ATTR_MODE: Final = "mode"
+ATTR_LEVEL: Final = "level"
+ATTR_DURATION: Final = "duration"

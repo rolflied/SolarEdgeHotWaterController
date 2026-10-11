@@ -1,6 +1,5 @@
 {
   "name": "SolarEdge Hot Water Controller",
-  "filename": "solaredge_hwc.zip",
-  "domains": ["sensor", "binary_sensor"],
+  "homeassistant": "2026.10.0",
   "render_readme": true
 }

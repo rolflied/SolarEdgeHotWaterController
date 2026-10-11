@@ -1,72 +1,176 @@
 """The SolarEdge Hot Water Controller integration."""
+
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 import logging
+from typing import Any
+
+import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    issue_registry as ir,
+)
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 
+from .api import CookieAuth, OAuthAuth, SolarEdgeAuth, SolarEdgeHWCClient
 from .const import (
-    DOMAIN,
-    PLATFORMS,
-    CONF_SITE_ID,
-    CONF_DEVICE_ID,
+    AUTH_COOKIE,
+    AUTH_CREDENTIALS,
+    CONF_AUTH_TYPE,
     CONF_COOKIE,
     CONF_SCAN_INTERVAL,
+    CONF_SITE_ID,
     CONF_TIMEOUT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TIMEOUT,
+    DOMAIN,
+    PLATFORMS,
 )
 from .coordinator import SolarEdgeHWCCoordinator
+from .limiter import STORAGE_VERSION, TemperatureLimiter, storage_key
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up SolarEdge Hot Water Controller from a config entry."""
-    coordinator = SolarEdgeHWCCoordinator(
-        hass,
-        site_id=entry.data[CONF_SITE_ID],
-        device_id=entry.data[CONF_DEVICE_ID],
-        cookie=entry.data[CONF_COOKIE],
-        scan_interval=entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-        timeout=entry.data.get(CONF_TIMEOUT, DEFAULT_TIMEOUT),
-    )
+# Unique IDs of version 1 were the same for every config entry
+_V1_UNIQUE_IDS = {
+    "se_hwc_power_active": "power",
+    "se_hwc_level_percent": "heating_level",
+    "se_hwc_activation_mode": "activation_mode",
+    "se_hwc_device_status": "device_status",
+    "se_hwc_total_energy": "total_energy",
+    "se_hwc_heating_active": "heating_active",
+    "se_hwc_device_online": "device_online",
+}
 
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        raise ConfigEntryNotReady(
-            f"Cannot connect to SolarEdge API: {err}"
-        ) from err
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+@dataclass
+class SolarEdgeHWCRuntimeData:
+    """Objects that live as long as the config entry is loaded."""
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    coordinator: SolarEdgeHWCCoordinator
+    limiter: TemperatureLimiter
 
-    # Reload integration when options (e.g. cookie) are updated
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+type SolarEdgeHWCConfigEntry = ConfigEntry[SolarEdgeHWCRuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the actions of the integration."""
+    async_setup_services(hass)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    coordinator: SolarEdgeHWCCoordinator | None = hass.data.get(DOMAIN, {}).get(
-        entry.entry_id
+@asynccontextmanager
+async def temporary_session(
+    hass: HomeAssistant, **kwargs: Any
+) -> AsyncIterator[aiohttp.ClientSession]:
+    """Create a session on Home Assistant's connector for a single task."""
+    session = async_create_clientsession(hass, auto_cleanup=False, **kwargs)
+    try:
+        yield session
+    finally:
+        session.detach()
+
+
+def create_client(
+    hass: HomeAssistant,
+    session: aiohttp.ClientSession,
+    data: Mapping[str, Any],
+    timeout: int,
+) -> SolarEdgeHWCClient:
+    """Build the API client for the login method stored in the entry data."""
+    auth: SolarEdgeAuth
+    if data.get(CONF_AUTH_TYPE) == AUTH_CREDENTIALS:
+        auth = OAuthAuth(
+            session,
+            data[CONF_USERNAME],
+            data[CONF_PASSWORD],
+            timeout,
+            # The login form needs cookies (a fresh jar per login), the API
+            # session keeps none
+            login_session=lambda: temporary_session(hass, cookie_jar=aiohttp.CookieJar()),
+        )
+    else:
+        auth = CookieAuth(data[CONF_COOKIE])
+    return SolarEdgeHWCClient(session, auth, data[CONF_SITE_ID], timeout)
+
+
+def create_api_session(hass: HomeAssistant, **kwargs: Any) -> aiohttp.ClientSession:
+    """
+    Create the session for API requests.
+
+    Cookies the portal sets must not mix with the cookie the user pasted,
+    so the session keeps none.
+    """
+    return async_create_clientsession(hass, cookie_jar=aiohttp.DummyCookieJar(), **kwargs)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry) -> bool:
+    """Set up SolarEdge Hot Water Controller from a config entry."""
+    # Created during setup, so Home Assistant detaches it on unload
+    session = create_api_session(hass)
+    client = create_client(
+        hass, session, entry.data, entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
     )
-    if coordinator:
-        await coordinator.async_shutdown()
+    coordinator = SolarEdgeHWCCoordinator(hass, entry, client)
+    # Raises ConfigEntryNotReady / ConfigEntryAuthFailed as appropriate
+    await coordinator.async_config_entry_first_refresh()
 
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
+    limiter = TemperatureLimiter(hass, entry, coordinator)
+    await limiter.async_start()
 
-    return unload_ok
+    entry.runtime_data = SolarEdgeHWCRuntimeData(coordinator=coordinator, limiter=limiter)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
 
 
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the config entry (e.g. after cookie update)."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+async def async_unload_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry) -> bool:
+    """Unload a config entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete the stored limiter state and its repair issue."""
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
+    ir.async_delete_issue(hass, DOMAIN, f"temperature_unavailable_{entry.entry_id}")
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old config entries."""
+    if entry.version > 2:
+        # Downgrade from a future version
+        return False
+
+    if entry.version == 1:
+        _LOGGER.debug("Migrating SolarEdge HWC entry %s from version 1", entry.entry_id)
+        data = dict(entry.data)
+        options = dict(entry.options)
+        data.setdefault(CONF_AUTH_TYPE, AUTH_COOKIE)
+        # Polling settings are options from version 2 on
+        options[CONF_SCAN_INTERVAL] = data.pop(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        options[CONF_TIMEOUT] = data.pop(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+
+        @callback
+        def _migrate_unique_id(entity: er.RegistryEntry) -> dict[str, Any] | None:
+            key = _V1_UNIQUE_IDS.get(entity.unique_id)
+            if key is None:
+                return None
+            return {"new_unique_id": f"{entry.entry_id}_{key}"}
+
+        await er.async_migrate_entries(hass, entry.entry_id, _migrate_unique_id)
+        hass.config_entries.async_update_entry(entry, data=data, options=options, version=2)
+
+    return True

@@ -1,327 +1,348 @@
 """Sensor platform for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
-import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
+    DOMAIN as SENSOR_DOMAIN,
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    PERCENTAGE,
+    MATCH_ALL,
+    EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
+    UnitOfRatio,
+    UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
-from .const import (
-    DOMAIN,
-    HEATING_POWER_THRESHOLD_W,
-    MODE_MANUAL,
-    MODE_SMART_ENERGY,
-    STATUS_ONLINE,
-    STATUS_CONNECTED,
-    ICON_LIGHTNING,
-    ICON_LIGHTNING_OFF,
-    ICON_GAUGE,
-    ICON_GAUGE_EMPTY,
-    ICON_HAND,
-    ICON_ROBOT,
-    ICON_SOLAR_POWER,
-    ICON_CHECK_NETWORK,
-    ICON_NETWORK_OFF,
-    ICON_FLASH,
+from . import SolarEdgeHWCConfigEntry
+from .const import DOMAIN, MAX_ENERGY_INTEGRATION_GAP
+from .coordinator import HWCData, SolarEdgeHWCCoordinator
+from .entity import SolarEdgeHWCEntity
+
+PARALLEL_UPDATES = 0
+
+ACTIVATION_MODES = ["auto", "manual", "schedule", "smart_energy", "off"]
+DEVICE_STATUSES = [
+    "active",
+    "online",
+    "offline",
+    "connected",
+    "disconnected",
+    "error",
+    "communication_error",
+]
+
+
+def _enum(value: str | None, options: list[str]) -> str | None:
+    """Turn an API value into an enum option, None if it is not a known one."""
+    if not value:
+        return None
+    option = str(value).lower()
+    return option if option in options else None
+
+
+def _lower(value: Any) -> str | None:
+    """Lower-case a free text API value."""
+    return str(value).lower() if value else None
+
+
+@dataclass(frozen=True, kw_only=True)
+class HWCSensorDescription(SensorEntityDescription):
+    """Describes a SolarEdge HWC sensor."""
+
+    value_fn: Callable[[HWCData], Any]
+    attrs_fn: Callable[[HWCData], dict[str, Any]] | None = None
+    # Attributes that only help when looking at the entity, not in history
+    record_attrs: bool = True
+    exists_fn: Callable[[HWCData], bool] = lambda _: True
+
+
+SENSORS: tuple[HWCSensorDescription, ...] = (
+    HWCSensorDescription(
+        key="power",
+        translation_key="power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda d: d.power,
+        record_attrs=False,
+        attrs_fn=lambda d: {
+            "estimated": d.power_is_estimated,
+            **{k: v for k, v in d.measurements.items() if k != "activePowerMeter"},
+        },
+    ),
+    HWCSensorDescription(
+        key="heating_level",
+        translation_key="heating_level",
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn=lambda d: d.level,
+    ),
+    HWCSensorDescription(
+        key="water_temperature",
+        translation_key="water_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value_fn=lambda d: d.temperature,
+        # Only controllers with a temperature probe report it
+        exists_fn=lambda d: d.temperature is not None,
+    ),
+    HWCSensorDescription(
+        key="activation_mode",
+        translation_key="activation_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=ACTIVATION_MODES,
+        value_fn=lambda d: _enum(d.activation_mode, ACTIVATION_MODES),
+        attrs_fn=lambda d: {"raw_mode": d.activation_mode},
+    ),
+    HWCSensorDescription(
+        key="auto_off_reason",
+        translation_key="auto_off_reason",
+        value_fn=lambda d: _lower(d.state.get("autoOffReason")),
+    ),
+    HWCSensorDescription(
+        key="schedule_type",
+        translation_key="schedule_type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _lower(d.state.get("scheduleType")),
+    ),
+    HWCSensorDescription(
+        key="device_status",
+        translation_key="device_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=DEVICE_STATUSES,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: _enum(d.device_status, DEVICE_STATUSES),
+        record_attrs=False,
+        attrs_fn=lambda d: {
+            "raw_status": d.device_status,
+            # Every field without a dedicated entity, for templates
+            **{
+                k: v
+                for k, v in d.state.items()
+                if k
+                not in (
+                    "measurements",
+                    "percentageLevel",
+                    "activationMode",
+                    "deviceStatus",
+                    "autoOffReason",
+                    "scheduleType",
+                )
+            },
+        },
+    ),
+    HWCSensorDescription(
+        key="rated_power",
+        translation_key="rated_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+        value_fn=lambda d: d.rated_power,
+    ),
 )
-from .coordinator import SolarEdgeHWCCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: SolarEdgeHWCConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up SolarEdge HWC sensors from a config entry."""
-    coordinator: SolarEdgeHWCCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data.coordinator
+    registry = er.async_get(hass)
 
-    sensors: list[SensorEntity] = [
-        HWCPowerSensor(coordinator, entry),
-        HWCLevelSensor(coordinator, entry),
-        HWCActivationModeSensor(coordinator, entry),
-        HWCDeviceStatusSensor(coordinator, entry),
+    def _wanted(description: HWCSensorDescription) -> bool:
+        # Keep an entity created earlier even if the value is missing right now
+        unique_id = f"{entry.entry_id}_{description.key}"
+        return description.exists_fn(coordinator.data) or (
+            registry.async_get_entity_id(SENSOR_DOMAIN, DOMAIN, unique_id) is not None
+        )
+
+    entities: list[SensorEntity] = [
+        (HWCSensor if description.record_attrs else HWCSensorUnrecordedAttrs)(
+            coordinator, description
+        )
+        for description in SENSORS
+        if _wanted(description)
     ]
-
-    # Add energy sensor only if the API returns total energy data
-    # (will return unavailable if field is missing, which is fine)
-    sensors.append(HWCTotalEnergySensor(coordinator, entry))
-
-    async_add_entities(sensors)
+    entities.append(HWCEnergySensor(coordinator))
+    entities.append(HWCNextScheduleSensor(coordinator))
+    entities.append(HWCManualUntilSensor(coordinator))
+    async_add_entities(entities)
 
 
-# ---------------------------------------------------------------------------
-# Base class
-# ---------------------------------------------------------------------------
+class HWCSensor(SolarEdgeHWCEntity, SensorEntity):
+    """A sensor whose value comes straight from the coordinator data."""
 
-class SolarEdgeHWCSensorBase(CoordinatorEntity, SensorEntity):
-    """Base class for all SolarEdge HWC sensors."""
-
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: SolarEdgeHWCCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.device_id)},
-            "name": "SolarEdge Hot Water Controller",
-            "manufacturer": "SolarEdge",
-            "model": "Home Hot Water Controller",
-            "configuration_url": (
-                f"https://monitoring.solaredge.com/v/s/"
-                f"{coordinator.site_id}/smart-energy/hot-water"
-            ),
-        }
+    entity_description: HWCSensorDescription
 
     @property
-    def hwc_data(self) -> dict[str, Any]:
-        """Return coordinator data, or empty dict if unavailable."""
-        return self.coordinator.data if self.coordinator.data else {}
+    def native_value(self) -> Any:
+        """Return the value."""
+        return self.entity_description.value_fn(self.hwc)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra attributes."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.hwc)
 
 
-# ---------------------------------------------------------------------------
-# Power sensor
-# ---------------------------------------------------------------------------
+class HWCSensorUnrecordedAttrs(HWCSensor):
+    """A sensor whose attributes are not written to the recorder."""
 
-class HWCPowerSensor(SolarEdgeHWCSensorBase):
-    """Current electrical power consumption of the hot water controller."""
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
-    _attr_translation_key = "power"
-    _attr_unique_id = "se_hwc_power_active"
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
-    _attr_state_class = SensorStateClass.MEASUREMENT
+
+class HWCEnergySensor(SolarEdgeHWCEntity, RestoreSensor):
+    """
+    Energy used by the heating element, for the Energy dashboard.
+
+    The portal reports no energy counter for the controller, so the power is
+    integrated over time (left Riemann sum between two polls). If a counter
+    turns up in the measurements it is used instead. Gaps longer than
+    MAX_ENERGY_INTEGRATION_GAP (Home Assistant stopped, portal unreachable)
+    are skipped rather than guessed.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
+    _attr_suggested_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
     _attr_suggested_display_precision = 0
+
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator,
+            SensorEntityDescription(key="total_energy", translation_key="total_energy"),
+        )
+        self._energy: float = 0.0
+        self._last_power: float | None = None
+        self._last_time: datetime | None = None
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the counter."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) is not None:
+            try:
+                self._energy = float(last.native_value or 0)
+            except TypeError, ValueError:
+                self._energy = 0.0
+        self._remember(self.coordinator.data)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Add the energy since the previous poll."""
+        if self.coordinator.last_update_success:
+            now = dt_util.utcnow()
+            if (
+                self._last_power is not None
+                and self._last_time is not None
+                and now - self._last_time <= MAX_ENERGY_INTEGRATION_GAP
+            ):
+                hours = (now - self._last_time).total_seconds() / 3600
+                self._energy += max(self._last_power, 0.0) * hours
+            self._remember(self.coordinator.data)
+        else:
+            self._last_power = None
+        super()._handle_coordinator_update()
+
+    def _remember(self, data: HWCData | None) -> None:
+        """Store the current power as start of the next interval."""
+        self._last_power = data.power if data else None
+        self._last_time = dt_util.utcnow()
 
     @property
     def native_value(self) -> float:
-        """Return active power in watts, or 0 if the API reports no value.
-
-        The SolarEdge API omits activePowerMeter when power is zero,
-        so a missing value is treated as 0 W rather than unknown.
-        """
-        measurements = self.hwc_data.get("measurements") or {}
-        raw = measurements.get("activePowerMeter")
-        if raw is None:
-            return 0.0
-        return round(float(raw), 2)
-
-    @property
-    def icon(self) -> str:
-        """Use filled bolt when actively consuming power."""
-        value = self.native_value
-        if value and value > HEATING_POWER_THRESHOLD_W:
-            return ICON_LIGHTNING
-        return ICON_LIGHTNING_OFF
+        """Return the energy in Wh."""
+        if (counter := self.hwc.energy_counter) is not None:
+            return round(counter, 1)
+        return round(self._energy, 1)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """
-        Expose all remaining measurement fields as attributes.
-        This makes additional API fields (reactive power, voltage, current, etc.)
-        visible even before dedicated sensors are created for them.
-        """
-        measurements = self.hwc_data.get("measurements", {})
-        return {
-            key: value
-            for key, value in measurements.items()
-            if key != "activePowerMeter"
-        }
+        """Tell where the value comes from."""
+        return {"source": "api" if self.hwc.energy_counter is not None else "integrated"}
 
 
-# ---------------------------------------------------------------------------
-# Level sensor
-# ---------------------------------------------------------------------------
+class HWCNextScheduleSensor(SolarEdgeHWCEntity, SensorEntity):
+    """Start of the next enabled time schedule."""
 
-class HWCLevelSensor(SolarEdgeHWCSensorBase):
-    """Heating level percentage (how much of the target temperature is reached)."""
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    # The schedule list changes rarely and would bloat the history
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
-    _attr_translation_key = "heating_level"
-    _attr_unique_id = "se_hwc_level_percent"
-    _attr_native_unit_of_measurement = PERCENTAGE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_suggested_display_precision = 0
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator,
+            SensorEntityDescription(key="next_schedule", translation_key="next_schedule"),
+        )
 
     @property
-    def native_value(self) -> int | None:
-        """Return the heating level as a percentage."""
-        level = self.hwc_data.get("percentageLevel")
-        if level is None:
-            return None
-        return int(level)
-
-    @property
-    def icon(self) -> str:
-        """Show a full or empty gauge depending on level."""
-        level = self.native_value
-        if level is not None and level > 5:
-            return ICON_GAUGE
-        return ICON_GAUGE_EMPTY
-
-
-# ---------------------------------------------------------------------------
-# Activation mode sensor
-# ---------------------------------------------------------------------------
-
-class HWCActivationModeSensor(SolarEdgeHWCSensorBase):
-    """Current activation / operating mode of the controller."""
-
-    _attr_translation_key = "activation_mode"
-    _attr_unique_id = "se_hwc_activation_mode"
-
-    _MODE_LABELS: dict[str, str] = {
-        "MANUAL": "Manual",
-        "AUTO": "Automatic",
-        "SMART_ENERGY": "Smart Energy",
-        "SCHEDULE": "Schedule",
-        "OFF": "Off",
-    }
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the activation mode in a readable form."""
-        mode = self.hwc_data.get("activationMode")
-        if mode is None:
-            return None
-        return self._MODE_LABELS.get(mode, mode.replace("_", " ").title())
-
-    @property
-    def icon(self) -> str:
-        """Return icon matching the current mode."""
-        mode = self.hwc_data.get("activationMode", "")
-        if mode == "MANUAL":
-            return ICON_HAND
-        if mode == "SMART_ENERGY":
-            return ICON_SOLAR_POWER
-        # AUTO / SCHEDULE
-        return ICON_ROBOT
+    def native_value(self) -> datetime | None:
+        """Return the next start."""
+        return self.hwc.next_schedule_start(dt_util.now())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose the raw API value so automations can compare against it."""
-        return {"raw_mode": self.hwc_data.get("activationMode", "")}
+        """Expose the schedules in a readable form."""
+        schedules = []
+        for item in self.hwc.schedules:
+            entry: dict[str, Any] = {
+                "enabled": bool(item.get("enable")),
+                "days": [str(day).lower() for day in item.get("scheduledDays") or []],
+                "smart_saver": bool(item.get("smartSaver")),
+            }
+            for key, name in (("startTime", "start"), ("endTime", "end")):
+                if isinstance(item.get(key), (int, float)):
+                    minutes = int(item[key])
+                    entry[name] = f"{minutes // 60:02d}:{minutes % 60:02d}"
+            for key, name in (
+                ("minOnDuration", "min_on_minutes"),
+                ("maxOnDuration", "max_on_minutes"),
+            ):
+                if item.get(key) is not None:
+                    entry[name] = item[key]
+            schedules.append(entry)
+        return {"schedules": schedules}
 
 
-# ---------------------------------------------------------------------------
-# Device status sensor
-# ---------------------------------------------------------------------------
+class HWCManualUntilSensor(SolarEdgeHWCEntity, SensorEntity):
+    """End of a timed manual run (boost) started from Home Assistant."""
 
-class HWCDeviceStatusSensor(SolarEdgeHWCSensorBase):
-    """
-    Device / connection status reported by the SolarEdge cloud.
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
 
-    Also exposes all additional, unmapped API fields as attributes so
-    that users can inspect the full API response in the entity panel.
-    """
-
-    _attr_translation_key = "device_status"
-    _attr_unique_id = "se_hwc_device_status"
-
-    _STATUS_LABELS: dict[str, str] = {
-        "ONLINE": "Online",
-        "OFFLINE": "Offline",
-        "ERROR": "Error",
-        "CONNECTED": "Connected",
-        "DISCONNECTED": "Disconnected",
-        "COMMUNICATION_ERROR": "Communication Error",
-    }
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the device status in a readable form."""
-        status = self.hwc_data.get("deviceStatus")
-        if status is None:
-            return None
-        return self._STATUS_LABELS.get(status, status.replace("_", " ").title())
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator,
+            SensorEntityDescription(key="boost_end", translation_key="boost_end"),
+        )
 
     @property
-    def icon(self) -> str:
-        """Use a network-check icon when online, network-off when not."""
-        status = self.hwc_data.get("deviceStatus", "")
-        if status in (STATUS_ONLINE, STATUS_CONNECTED):
-            return ICON_CHECK_NETWORK
-        return ICON_NETWORK_OFF
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """
-        Expose every remaining top-level API field as an attribute.
-        This covers any fields the API returns that do not have a
-        dedicated sensor, making them available for use in templates
-        and automations without any code changes.
-        """
-        known_keys = {
-            "measurements",
-            "percentageLevel",
-            "activationMode",
-            "deviceStatus",
-        }
-        attrs: dict[str, Any] = {
-            "raw_status": self.hwc_data.get("deviceStatus", ""),
-        }
-        for key, value in self.hwc_data.items():
-            if key not in known_keys:
-                attrs[key] = value
-        return attrs
-
-
-# ---------------------------------------------------------------------------
-# Total energy sensor
-# ---------------------------------------------------------------------------
-
-class HWCTotalEnergySensor(SolarEdgeHWCSensorBase):
-    """
-    Total accumulated energy consumed by the hot water controller.
-
-    Uses SensorStateClass.TOTAL_INCREASING so Home Assistant can track
-    long-term statistics and display the data in the Energy Dashboard.
-
-    This sensor is only meaningful if the API returns
-    measurements.totalActiveEnergyMeter (or a similarly named field).
-    It will show as "unavailable" if the field is absent.
-    """
-
-    _attr_translation_key = "total_energy"
-    _attr_unique_id = "se_hwc_total_energy"
-    _attr_device_class = SensorDeviceClass.ENERGY
-    _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = ICON_FLASH
-    _attr_suggested_display_precision = 0
-
-    # Possible field names for the energy counter in the API response
-    _ENERGY_FIELD_CANDIDATES = (
-        "totalActiveEnergyMeter",
-        "totalEnergy",
-        "energyTotal",
-        "consumedEnergy",
-    )
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the total energy in Wh, or None if unavailable."""
-        measurements = self.hwc_data.get("measurements", {})
-        for field in self._ENERGY_FIELD_CANDIDATES:
-            value = measurements.get(field)
-            if value is not None:
-                return round(float(value), 1)
-        return None
+    def native_value(self) -> datetime | None:
+        """Return the end time."""
+        return self.coordinator.manual_until

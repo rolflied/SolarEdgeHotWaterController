@@ -1,0 +1,60 @@
+set_operation_mode:
+  target:
+    entity:
+      integration: solaredge_hwc
+      domain: water_heater
+  fields:
+    mode:
+      required: true
+      example: "on"
+      selector:
+        select:
+          translation_key: operation_mode
+          options:
+            - "auto"
+            - "on"
+            - "off"
+            - "schedule"
+    level:
+      example: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
+    duration:
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          unit_of_measurement: min
+          mode: box
+
+boost:
+  target:
+    entity:
+      integration: solaredge_hwc
+      domain: water_heater
+  fields:
+    duration:
+      example: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          unit_of_measurement: min
+          mode: box
+    level:
+      example: 100
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: slider
