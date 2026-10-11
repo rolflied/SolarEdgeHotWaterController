@@ -151,6 +151,10 @@ Enter the new Device ID (and Site ID if it changed) under **Reconfigure**. The e
 - *Diagnostics* (device page → three-dot menu) download the raw API answers with credentials and serial number removed – useful for bug reports.
 - Login flow and control endpoint follow the community projects [barnold89/solaredge_hotwater](https://github.com/barnold89/solaredge_hotwater) and [karuzo17/solaredge-api-home-assistant](https://github.com/karuzo17/solaredge-api-home-assistant) (both MIT).
 
+## License
+
+MIT, see [LICENSE](LICENSE). Changes per version: [CHANGELOG.md](CHANGELOG.md).
+
 ## Development
 
 Tests run against Home Assistant 2026.10 on Python 3.14.
