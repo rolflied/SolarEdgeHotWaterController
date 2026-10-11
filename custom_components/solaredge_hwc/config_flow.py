@@ -1,17 +1,18 @@
 """Config flow for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 import logging
 from typing import Any
 
-import voluptuous as vol
+import probatio as vol
 
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
@@ -29,17 +30,16 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from . import create_auth, create_session
+from . import create_api_session, create_client
 from .api import (
-    OAuthAuth,
     SolarEdgeAuthError,
     SolarEdgeConnectionError,
     SolarEdgeError,
-    SolarEdgeHWCClient,
 )
 from .const import (
     AUTH_COOKIE,
     AUTH_CREDENTIALS,
+    BASE_URL,
     CONF_AUTH_TYPE,
     CONF_COOKIE,
     CONF_DEVICE_ID,
@@ -71,7 +71,11 @@ class _FlowError(Exception):
 
 
 async def _async_check(
-    data: Mapping[str, Any], timeout: int, *, discover: bool = False
+    hass: HomeAssistant,
+    data: Mapping[str, Any],
+    timeout: int,
+    *,
+    discover: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Log in and read the device state (or, with ``discover``, the device list).
@@ -79,35 +83,34 @@ async def _async_check(
     Returns the load devices of the site when ``discover`` is set.
     Raises ``_FlowError`` with the error key on failure.
     """
-    async with create_session() as session:
-        auth = create_auth(session, dict(data), timeout)
-        client = SolarEdgeHWCClient(session, auth, data[CONF_SITE_ID], timeout)
-        try:
-            if isinstance(auth, OAuthAuth):
-                await auth.async_login()
-            if discover:
-                return await client.async_get_load_devices()
-            await client.async_get_state(data[CONF_DEVICE_ID])
-        except SolarEdgeAuthError as err:
-            _LOGGER.debug("Authentication failed: %s", err)
-            raise _FlowError("invalid_auth") from err
-        except SolarEdgeConnectionError as err:
-            _LOGGER.debug("Connection failed: %s", err)
-            raise _FlowError("cannot_connect") from err
-        except SolarEdgeError as err:
-            _LOGGER.debug("Unexpected response: %s", err)
-            raise _FlowError("invalid_response") from err
-        except Exception as err:
-            _LOGGER.exception("Unexpected error while validating")
-            raise _FlowError("unknown") from err
+    # Requests log in first if needed, so the login is checked as well
+    session = create_api_session(hass, auto_cleanup=False)
+    client = create_client(hass, session, data, timeout)
+    try:
+        if discover:
+            return await client.async_get_load_devices()
+        await client.async_get_state(data[CONF_DEVICE_ID])
+    except SolarEdgeAuthError as err:
+        _LOGGER.debug("Authentication failed: %s", err)
+        raise _FlowError("invalid_auth") from err
+    except SolarEdgeConnectionError as err:
+        _LOGGER.debug("Connection failed: %s", err)
+        raise _FlowError("cannot_connect") from err
+    except SolarEdgeError as err:
+        _LOGGER.debug("Unexpected response: %s", err)
+        raise _FlowError("invalid_response") from err
+    except Exception as err:
+        _LOGGER.exception("Unexpected error while validating")
+        raise _FlowError("unknown") from err
+    finally:
+        session.detach()
     return []
 
 
 def _clean(user_input: Mapping[str, Any]) -> dict[str, Any]:
     """Strip whitespace from all text fields."""
     return {
-        key: value.strip() if isinstance(value, str) else value
-        for key, value in user_input.items()
+        key: value.strip() if isinstance(value, str) else value for key, value in user_input.items()
     }
 
 
@@ -130,9 +133,7 @@ def _credentials_schema(
     defaults: Mapping[str, Any], *, with_device: bool, password_required: bool = True
 ) -> vol.Schema:
     """Form for username and password login."""
-    password_key = (
-        vol.Required(CONF_PASSWORD) if password_required else vol.Optional(CONF_PASSWORD)
-    )
+    password_key = vol.Required(CONF_PASSWORD) if password_required else vol.Optional(CONF_PASSWORD)
     schema: dict[Any, Any] = {
         vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME, vol.UNDEFINED)): str,
         password_key: _PASSWORD_SELECTOR,
@@ -151,9 +152,7 @@ def _cookie_schema(defaults: Mapping[str, Any], *, cookie_required: bool) -> vol
     return vol.Schema(
         {
             vol.Required(CONF_SITE_ID, default=defaults.get(CONF_SITE_ID, vol.UNDEFINED)): str,
-            vol.Optional(
-                CONF_DEVICE_ID, default=defaults.get(CONF_DEVICE_ID, vol.UNDEFINED)
-            ): str,
+            vol.Optional(CONF_DEVICE_ID, default=defaults.get(CONF_DEVICE_ID, vol.UNDEFINED)): str,
             cookie_key: _MULTILINE_SELECTOR,
         }
     )
@@ -174,10 +173,13 @@ def _async_migrate_device_id(
     if old_device_id == new_device_id:
         return
     device_reg = dr.async_get(hass)
-    device = device_reg.async_get_device(identifiers={(DOMAIN, old_device_id)})
-    if device is None or entry.entry_id not in device.config_entries:
+    device = device_reg.async_get_device_by_identifier((DOMAIN, old_device_id), entry.entry_id)
+    if device is None:
         return
-    if device_reg.async_get_device(identifiers={(DOMAIN, new_device_id)}) is not None:
+    if (
+        device_reg.async_get_device_by_identifier((DOMAIN, new_device_id), entry.entry_id)
+        is not None
+    ):
         _LOGGER.warning(
             "A device with ID %s already exists; not migrating device %s",
             new_device_id,
@@ -205,9 +207,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # -- initial setup ------------------------------------------------------
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Let the user choose how to log in."""
         return self.async_show_menu(step_id="user", menu_options=["credentials", "cookie"])
 
@@ -219,7 +219,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = {**_clean(user_input), CONF_AUTH_TYPE: AUTH_CREDENTIALS}
             try:
-                self._devices = await _async_check(data, DEFAULT_TIMEOUT, discover=True)
+                self._devices = await _async_check(self.hass, data, DEFAULT_TIMEOUT, discover=True)
             except _FlowError as err:
                 errors["base"] = str(err)
             else:
@@ -230,21 +230,20 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="credentials",
             data_schema=_credentials_schema(user_input or {}, with_device=False),
             errors=errors,
+            description_placeholders={"portal_url": BASE_URL},
         )
 
-    async def async_step_cookie(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_cookie(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Use a browser session cookie."""
         errors: dict[str, str] = {}
         if user_input is not None:
             data = {**_clean(user_input), CONF_AUTH_TYPE: AUTH_COOKIE}
             try:
                 if data.get(CONF_DEVICE_ID):
-                    await _async_check(data, DEFAULT_TIMEOUT)
+                    await _async_check(self.hass, data, DEFAULT_TIMEOUT)
                     self._data = data
                     return await self._async_create(data)
-                self._devices = await _async_check(data, DEFAULT_TIMEOUT, discover=True)
+                self._devices = await _async_check(self.hass, data, DEFAULT_TIMEOUT, discover=True)
             except _FlowError as err:
                 errors["base"] = str(err)
             else:
@@ -255,6 +254,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="cookie",
             data_schema=_cookie_schema(user_input or {}, cookie_required=True),
             errors=errors,
+            description_placeholders={"portal_url": BASE_URL},
         )
 
     async def _async_after_discovery(self, errors: dict[str, str]) -> ConfigFlowResult:
@@ -285,9 +285,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_DEVICE_ID): SelectSelector(
-                        SelectSelectorConfig(
-                            options=options, mode=SelectSelectorMode.LIST
-                        )
+                        SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
                     )
                 }
             ),
@@ -309,9 +307,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # -- reauthentication ---------------------------------------------------
 
-    async def async_step_reauth(
-        self, entry_data: Mapping[str, Any]
-    ) -> ConfigFlowResult:
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         """Credentials were rejected: ask for new ones."""
         return await self.async_step_reauth_confirm()
 
@@ -327,7 +323,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             data = {**entry.data, **_clean(user_input)}
             try:
                 await _async_check(
-                    data, entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+                    self.hass, data, entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
                 )
             except _FlowError as err:
                 errors["base"] = str(err)
@@ -337,9 +333,7 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
         if uses_credentials:
             schema = vol.Schema(
                 {
-                    vol.Required(
-                        CONF_USERNAME, default=entry.data.get(CONF_USERNAME, "")
-                    ): str,
+                    vol.Required(CONF_USERNAME, default=entry.data.get(CONF_USERNAME, "")): str,
                     vol.Required(CONF_PASSWORD): _PASSWORD_SELECTOR,
                 }
             )
@@ -358,9 +352,14 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Let the user choose the login method for the new configuration."""
+        entry = self._get_reconfigure_entry()
         return self.async_show_menu(
             step_id="reconfigure",
             menu_options=["reconfigure_credentials", "reconfigure_cookie"],
+            description_placeholders={
+                "site_id": entry.data[CONF_SITE_ID],
+                "device_id": entry.data[CONF_DEVICE_ID],
+            },
         )
 
     async def async_step_reconfigure_credentials(
@@ -445,14 +444,12 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             return None
 
         try:
-            await _async_check(data, timeout)
+            await _async_check(self.hass, data, timeout)
         except _FlowError as err:
             errors["base"] = str(err)
             return None
 
-        _async_migrate_device_id(
-            self.hass, entry, entry.data[CONF_DEVICE_ID], data[CONF_DEVICE_ID]
-        )
+        _async_migrate_device_id(self.hass, entry, entry.data[CONF_DEVICE_ID], data[CONF_DEVICE_ID])
 
         update: dict[str, Any] = {"data": data, "unique_id": new_unique_id}
         # Only rewrite the title while it is still the generated one
@@ -460,17 +457,13 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
             ENTRY_TITLE_FORMAT.format(site_id=entry.data[CONF_SITE_ID])
         ):
             update["title"] = ENTRY_TITLE_FORMAT.format(site_id=data[CONF_SITE_ID])
-        return self.async_update_reload_and_abort(
-            entry, reason="reconfigure_successful", **update
-        )
+        return self.async_update_reload_and_abort(entry, **update)
 
 
-class SolarEdgeHWCOptionsFlow(OptionsFlow):
-    """Polling and behaviour settings."""
+class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
+    """Polling and behaviour settings; the entry reloads when they change."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(

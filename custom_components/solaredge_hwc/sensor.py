@@ -1,4 +1,5 @@
 """Sensor platform for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -15,15 +16,16 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    PERCENTAGE,
+    MATCH_ALL,
     EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
+    UnitOfRatio,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import SolarEdgeHWCConfigEntry
@@ -64,6 +66,8 @@ class HWCSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[HWCData], Any]
     attrs_fn: Callable[[HWCData], dict[str, Any]] | None = None
+    # Attributes that only help when looking at the entity, not in history
+    record_attrs: bool = True
     exists_fn: Callable[[HWCData], bool] = lambda _: True
 
 
@@ -76,6 +80,7 @@ SENSORS: tuple[HWCSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=lambda d: d.power,
+        record_attrs=False,
         attrs_fn=lambda d: {
             "estimated": d.power_is_estimated,
             **{k: v for k, v in d.measurements.items() if k != "activePowerMeter"},
@@ -84,7 +89,7 @@ SENSORS: tuple[HWCSensorDescription, ...] = (
     HWCSensorDescription(
         key="heating_level",
         translation_key="heating_level",
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         value_fn=lambda d: d.level,
@@ -126,6 +131,7 @@ SENSORS: tuple[HWCSensorDescription, ...] = (
         options=DEVICE_STATUSES,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda d: _enum(d.device_status, DEVICE_STATUSES),
+        record_attrs=False,
         attrs_fn=lambda d: {
             "raw_status": d.device_status,
             # Every field without a dedicated entity, for templates
@@ -159,7 +165,7 @@ SENSORS: tuple[HWCSensorDescription, ...] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SolarEdgeHWCConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up SolarEdge HWC sensors from a config entry."""
     coordinator = entry.runtime_data.coordinator
@@ -173,7 +179,9 @@ async def async_setup_entry(
         )
 
     entities: list[SensorEntity] = [
-        HWCSensor(coordinator, description)
+        (HWCSensor if description.record_attrs else HWCSensorUnrecordedAttrs)(
+            coordinator, description
+        )
         for description in SENSORS
         if _wanted(description)
     ]
@@ -199,6 +207,12 @@ class HWCSensor(SolarEdgeHWCEntity, SensorEntity):
         if self.entity_description.attrs_fn is None:
             return None
         return self.entity_description.attrs_fn(self.hwc)
+
+
+class HWCSensorUnrecordedAttrs(HWCSensor):
+    """A sensor whose attributes are not written to the recorder."""
+
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
 
 class HWCEnergySensor(SolarEdgeHWCEntity, RestoreSensor):
@@ -234,7 +248,7 @@ class HWCEnergySensor(SolarEdgeHWCEntity, RestoreSensor):
         if (last := await self.async_get_last_sensor_data()) is not None:
             try:
                 self._energy = float(last.native_value or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 self._energy = 0.0
         self._remember(self.coordinator.data)
 
@@ -277,6 +291,8 @@ class HWCNextScheduleSensor(SolarEdgeHWCEntity, SensorEntity):
     """Start of the next enabled time schedule."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    # The schedule list changes rarely and would bloat the history
+    _unrecorded_attributes = frozenset({MATCH_ALL})
 
     def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
         """Initialize the sensor."""

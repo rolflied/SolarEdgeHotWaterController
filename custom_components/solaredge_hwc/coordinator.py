@@ -1,4 +1,5 @@
 """Data update coordinator for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from .api import (
     SolarEdgeAuthError,
     SolarEdgeError,
     SolarEdgeHWCClient,
+    SolarEdgeRateLimitError,
 )
 from .const import (
     API_MODE_AUTO,
@@ -43,6 +45,9 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _WEEKDAYS = ("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY")
+
+# How long the cloud may lag behind a command before its state is trusted again
+_COMMAND_GRACE = timedelta(minutes=2)
 
 # Field names under which an energy counter might show up in "measurements"
 _ENERGY_FIELDS = ("totalActiveEnergyMeter", "totalEnergy", "energyTotal", "consumedEnergy")
@@ -210,7 +215,7 @@ def _to_float(value: Any) -> float | None:
     """Convert to float, None for missing or malformed values."""
     try:
         return float(value) if value is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -253,6 +258,7 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
         self.boost_duration: int = DEFAULT_BOOST_DURATION_MIN
         # End of a manual run with a duration started from Home Assistant
         self.manual_until: datetime | None = None
+        self._command_time: datetime = dt_util.utcnow()
 
     async def _async_update_data(self) -> HWCData:
         """Fetch the state, and the static info every few minutes."""
@@ -261,6 +267,13 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
         except SolarEdgeAuthError as err:
             raise ConfigEntryAuthFailed(
                 translation_domain=DOMAIN, translation_key="auth_failed"
+            ) from err
+        except SolarEdgeRateLimitError as err:
+            # Wait as long as the portal asked before polling again
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="rate_limited",
+                retry_after=err.retry_after,
             ) from err
         except SolarEdgeError as err:
             raise UpdateFailed(
@@ -283,8 +296,13 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
             self._info_fetched = now
 
         data = HWCData(state=state, info=self._info)
-        if data.activation_mode != API_MODE_MANUAL or (
-            self.manual_until is not None and self.manual_until <= now
+        if self.manual_until is not None and (
+            self.manual_until <= now
+            # The cloud may still report the old mode right after a command
+            or (
+                data.activation_mode != API_MODE_MANUAL
+                and now - self._command_time > _COMMAND_GRACE
+            )
         ):
             self.manual_until = None
         return data
@@ -319,9 +337,7 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
                 translation_placeholders={"mode": operation},
             )
 
-    async def async_boost(
-        self, duration: int | None = None, level: int | None = None
-    ) -> None:
+    async def async_boost(self, duration: int | None = None, level: int | None = None) -> None:
         """Heat for a limited time, then return to the previous mode."""
         minutes = self.boost_duration if duration is None else duration
         await self.async_set_operation_mode(
@@ -360,8 +376,9 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
                 translation_placeholders={"error": str(err)},
             ) from err
 
+        self._command_time = dt_util.utcnow()
         self.manual_until = (
-            dt_util.utcnow() + timedelta(seconds=duration)
+            self._command_time + timedelta(seconds=duration)
             if mode == API_MODE_MANUAL and duration
             else None
         )
@@ -385,9 +402,7 @@ class SolarEdgeHWCCoordinator(DataUpdateCoordinator[HWCData]):
             self._refresh_unsub = None
             self.hass.async_create_task(self.async_request_refresh())
 
-        self._refresh_unsub = async_call_later(
-            self.hass, POST_COMMAND_REFRESH_DELAY, _refresh
-        )
+        self._refresh_unsub = async_call_later(self.hass, POST_COMMAND_REFRESH_DELAY, _refresh)
 
     async def async_shutdown(self) -> None:
         """Cancel a pending refresh when the entry is unloaded."""

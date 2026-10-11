@@ -1,4 +1,5 @@
 """Constants for the SolarEdge Hot Water Controller integration."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -14,6 +15,7 @@ PLATFORMS: Final = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.WATER_HEATER,
 ]
 
 # ---------------------------------------------------------------------------
@@ -105,7 +107,6 @@ MAX_ENERGY_INTEGRATION_GAP: Final = timedelta(minutes=15)
 # Actions
 SERVICE_SET_OPERATION_MODE: Final = "set_operation_mode"
 SERVICE_BOOST: Final = "boost"
-ATTR_CONFIG_ENTRY_ID: Final = "config_entry_id"
 ATTR_MODE: Final = "mode"
 ATTR_LEVEL: Final = "level"
 ATTR_DURATION: Final = "duration"

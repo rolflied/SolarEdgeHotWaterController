@@ -1,9 +1,9 @@
 set_operation_mode:
+  target:
+    entity:
+      integration: solaredge_hwc
+      domain: water_heater
   fields:
-    config_entry_id:
-      selector:
-        config_entry:
-          integration: solaredge_hwc
     mode:
       required: true
       example: "on"
@@ -35,11 +35,11 @@ set_operation_mode:
           mode: box
 
 boost:
+  target:
+    entity:
+      integration: solaredge_hwc
+      domain: water_heater
   fields:
-    config_entry_id:
-      selector:
-        config_entry:
-          integration: solaredge_hwc
     duration:
       example: 60
       selector:

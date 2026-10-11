@@ -4,6 +4,7 @@ Number platform: settings for manual heating and boost.
 These values live in Home Assistant only; SolarEdge receives them with the
 next command sent by the switch, the select or the boost button.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -14,9 +15,9 @@ from homeassistant.components.number import (
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfRatio, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SolarEdgeHWCConfigEntry
 from .const import DEFAULT_BOOST_DURATION_MIN, DEFAULT_MANUAL_LEVEL, MAX_BOOST_DURATION_MIN
@@ -42,7 +43,7 @@ NUMBERS: tuple[HWCNumberDescription, ...] = (
         native_min_value=1,
         native_max_value=100,
         native_step=1,
-        native_unit_of_measurement=PERCENTAGE,
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         mode=NumberMode.SLIDER,
         default=DEFAULT_MANUAL_LEVEL,
         set_fn=lambda c, v: setattr(c, "manual_level", v),
@@ -65,7 +66,7 @@ NUMBERS: tuple[HWCNumberDescription, ...] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SolarEdgeHWCConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the setting numbers."""
     coordinator = entry.runtime_data.coordinator
@@ -95,9 +96,7 @@ class HWCSettingNumber(SolarEdgeHWCEntity, RestoreNumber):
         if (last := await self.async_get_last_number_data()) is not None and (
             last.native_value is not None
         ):
-            value = min(
-                max(last.native_value, self.native_min_value), self.native_max_value
-            )
+            value = min(max(last.native_value, self.native_min_value), self.native_max_value)
             self._attr_native_value = value
         self.entity_description.set_fn(self.coordinator, int(self._attr_native_value))
 

@@ -11,7 +11,7 @@
       },
       "credentials": {
         "title": "Mit dem SolarEdge-Konto anmelden",
-        "description": "Verwende die Zugangsdaten von [monitoring.solaredge.com](https://monitoring.solaredge.com). Konten mit Zwei-Faktor-Anmeldung werden nicht unterstützt; dafür bitte die Cookie-Methode nutzen.\n\nDie Site-ID ist die Zahl in der Portal-URL: `.../v/s/XXXXXXX/...`. Alle Warmwasser-Controller der Anlage werden automatisch gefunden.",
+        "description": "Verwende die Zugangsdaten von [monitoring.solaredge.com]({portal_url}). Konten mit Zwei-Faktor-Anmeldung werden nicht unterstützt; dafür bitte die Cookie-Methode nutzen.\n\nDie Site-ID ist die Zahl in der Portal-URL: `.../v/s/XXXXXXX/...`. Alle Warmwasser-Controller der Anlage werden automatisch gefunden.",
         "data": {
           "username": "E-Mail-Adresse",
           "password": "Passwort",
@@ -25,7 +25,7 @@
       },
       "cookie": {
         "title": "Mit Browser-Cookie anmelden",
-        "description": "1. Bei [monitoring.solaredge.com](https://monitoring.solaredge.com) anmelden und **Smart Energy → Warmwasser** öffnen\n2. F12 drücken → Reiter **Netzwerk** → Seite neu laden\n3. Eine Anfrage an `monitoring.solaredge.com` anklicken und den kompletten Wert des Anfrage-Headers `Cookie:` kopieren\n\nDie Geräte-ID ist die zweite Zahl in der Anfrage `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`. Leer lassen, um die Geräte der Anlage automatisch zu suchen.",
+        "description": "1. Bei [monitoring.solaredge.com]({portal_url}) anmelden und **Smart Energy → Warmwasser** öffnen\n2. F12 drücken → Reiter **Netzwerk** → Seite neu laden\n3. Eine Anfrage an `monitoring.solaredge.com` anklicken und den kompletten Wert des Anfrage-Headers `Cookie:` kopieren\n\nDie Geräte-ID ist die zweite Zahl in der Anfrage `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`. Leer lassen, um die Geräte der Anlage automatisch zu suchen.",
         "data": {
           "site_id": "Site ID",
           "device_id": "Geräte-ID",
@@ -105,9 +105,7 @@
     },
     "abort": {
       "already_configured": "Dieser SolarEdge Hot Water Controller ist bereits eingerichtet.",
-      "no_devices": "Auf dieser Anlage wurde kein Warmwasser-Controller (Verbraucher) gefunden.",
-      "reauth_successful": "Anmeldung erneuert. Die Integration wurde neu geladen.",
-      "reconfigure_successful": "Konfiguration aktualisiert. Die Integration wurde neu geladen."
+      "no_devices": "Auf dieser Anlage wurde kein Warmwasser-Controller (Verbraucher) gefunden."
     }
   },
   "options": {
@@ -232,6 +230,16 @@
         "name": "Manuell heizen"
       }
     },
+    "water_heater": {
+      "hwc": {
+        "state": {
+          "auto": "Automatik",
+          "on": "Ein",
+          "off": "Aus",
+          "schedule": "Zeitplan"
+        }
+      }
+    },
     "number": {
       "manual_level": {
         "name": "Heizstufe manuell"
@@ -259,22 +267,15 @@
     "invalid_mode": {
       "message": "Unbekannte Betriebsart: {mode}"
     },
-    "entry_not_loaded": {
-      "message": "Der SolarEdge-HWC-Eintrag {entry_id} ist nicht geladen."
-    },
-    "entry_required": {
-      "message": "Es sind mehrere (oder keine) SolarEdge-HWC-Einträge geladen. Bitte den Controller auswählen."
+    "rate_limited": {
+      "message": "SolarEdge hat um eine Pause gebeten; die nächste Abfrage wird verschoben."
     }
   },
   "services": {
     "set_operation_mode": {
       "name": "Betriebsart setzen",
-      "description": "Schaltet den Warmwasser-Controller auf Automatik, Ein, Aus oder Zeitplan. „Ein“ lässt sich in Stufe und Dauer begrenzen.",
+      "description": "Schaltet den Warmwasser-Controller auf Automatik, Ein, Aus oder Zeitplan. Anders als bei der Standardaktion für Warmwasserbereiter lässt sich „Ein“ in Stufe und Dauer begrenzen.",
       "fields": {
-        "config_entry_id": {
-          "name": "Controller",
-          "description": "Integrationseintrag des Controllers. Nur bei mehreren Controllern nötig."
-        },
         "mode": {
           "name": "Betriebsart",
           "description": "Neue Betriebsart."
@@ -293,10 +294,6 @@
       "name": "Boost",
       "description": "Heizt für eine begrenzte Zeit und kehrt dann in die vorherige Betriebsart zurück.",
       "fields": {
-        "config_entry_id": {
-          "name": "Controller",
-          "description": "Integrationseintrag des Controllers. Nur bei mehreren Controllern nötig."
-        },
         "duration": {
           "name": "Dauer",
           "description": "Minuten. Standard: Einstellung „Boost-Dauer“."

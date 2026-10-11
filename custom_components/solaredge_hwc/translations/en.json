@@ -11,7 +11,7 @@
       },
       "credentials": {
         "title": "Log in with your SolarEdge account",
-        "description": "Use the account you log in with at [monitoring.solaredge.com](https://monitoring.solaredge.com). Accounts with two-factor authentication are not supported; use the cookie method for those.\n\nThe Site ID is the number in the portal URL: `.../v/s/XXXXXXX/...`. All hot water controllers of the site are found automatically.",
+        "description": "Use the account you log in with at [monitoring.solaredge.com]({portal_url}). Accounts with two-factor authentication are not supported; use the cookie method for those.\n\nThe Site ID is the number in the portal URL: `.../v/s/XXXXXXX/...`. All hot water controllers of the site are found automatically.",
         "data": {
           "username": "Email address",
           "password": "Password",
@@ -25,7 +25,7 @@
       },
       "cookie": {
         "title": "Log in with a browser cookie",
-        "description": "1. Log in to [monitoring.solaredge.com](https://monitoring.solaredge.com) and open **Smart Energy → Hot Water**\n2. Press F12 → **Network** tab → reload the page\n3. Click a request to `monitoring.solaredge.com` and copy the full value of the `Cookie:` request header\n\nThe Device ID is the second number in the request `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`. Leave it empty to find the devices of the site automatically.",
+        "description": "1. Log in to [monitoring.solaredge.com]({portal_url}) and open **Smart Energy → Hot Water**\n2. Press F12 → **Network** tab → reload the page\n3. Click a request to `monitoring.solaredge.com` and copy the full value of the `Cookie:` request header\n\nThe Device ID is the second number in the request `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`. Leave it empty to find the devices of the site automatically.",
         "data": {
           "site_id": "Site ID",
           "device_id": "Device ID",
@@ -105,9 +105,7 @@
     },
     "abort": {
       "already_configured": "This SolarEdge Hot Water Controller is already configured.",
-      "no_devices": "No hot water controller (load device) was found on this site.",
-      "reauth_successful": "Login renewed. The integration has been reloaded.",
-      "reconfigure_successful": "Configuration updated. The integration has been reloaded."
+      "no_devices": "No hot water controller (load device) was found on this site."
     }
   },
   "options": {
@@ -232,6 +230,16 @@
         "name": "Manual heating"
       }
     },
+    "water_heater": {
+      "hwc": {
+        "state": {
+          "auto": "Automatic",
+          "on": "On",
+          "off": "Off",
+          "schedule": "Schedule"
+        }
+      }
+    },
     "number": {
       "manual_level": {
         "name": "Manual heating level"
@@ -259,22 +267,15 @@
     "invalid_mode": {
       "message": "Unknown operating mode: {mode}"
     },
-    "entry_not_loaded": {
-      "message": "The SolarEdge HWC entry {entry_id} is not loaded."
-    },
-    "entry_required": {
-      "message": "Several (or no) SolarEdge HWC entries are loaded. Please choose the controller."
+    "rate_limited": {
+      "message": "SolarEdge asked to slow down; the next update is delayed."
     }
   },
   "services": {
     "set_operation_mode": {
       "name": "Set operating mode",
-      "description": "Switches the hot water controller to automatic, on, off or schedule. 'On' can be limited in level and duration.",
+      "description": "Switches the hot water controller to automatic, on, off or schedule. Unlike the standard water heater action, 'On' can be limited in level and duration.",
       "fields": {
-        "config_entry_id": {
-          "name": "Controller",
-          "description": "Integration entry of the controller. Only needed with several controllers."
-        },
         "mode": {
           "name": "Mode",
           "description": "New operating mode."
@@ -293,10 +294,6 @@
       "name": "Boost",
       "description": "Heats for a limited time, then returns to the previous mode.",
       "fields": {
-        "config_entry_id": {
-          "name": "Controller",
-          "description": "Integration entry of the controller. Only needed with several controllers."
-        },
         "duration": {
           "name": "Duration",
           "description": "Minutes. Default: the 'Boost duration' setting."

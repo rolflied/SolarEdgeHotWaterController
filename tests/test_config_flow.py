@@ -1,4 +1,5 @@
 """Tests for the config flow."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -50,7 +51,6 @@ async def test_credentials_flow(hass: HomeAssistant, mock_client: dict[str, Asyn
         CONF_DEVICE_ID: DEVICE_ID,
     }
     assert result["result"].unique_id == f"{SITE_ID}_{DEVICE_ID}"
-    mock_client["login"].assert_awaited()
 
 
 async def test_credentials_flow_several_devices(
@@ -81,7 +81,7 @@ async def test_credentials_flow_invalid_auth(
     hass: HomeAssistant, mock_client: dict[str, AsyncMock]
 ) -> None:
     """Wrong credentials show an error."""
-    mock_client["login"].side_effect = SolarEdgeAuthError("nope")
+    mock_client["get_devices"].side_effect = SolarEdgeAuthError("nope")
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
@@ -139,7 +139,9 @@ async def test_reconfigure_new_device_keeps_device_entry(
     config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
-    device = device_registry.async_get_device(identifiers={(DOMAIN, DEVICE_ID)})
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, DEVICE_ID), config_entry.entry_id
+    )
     assert device is not None
 
     result = await config_entry.start_reconfigure_flow(hass)
@@ -170,9 +172,7 @@ async def test_options_flow(
     await hass.async_block_till_done()
 
     result = await hass.config_entries.options.async_init(config_entry.entry_id)
-    with patch(
-        "homeassistant.config_entries.ConfigEntries.async_schedule_reload"
-    ) as reload:
+    with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload") as reload:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             {CONF_SCAN_INTERVAL: 120, CONF_TIMEOUT: 15, CONF_SWITCH_OFF_MODE: "off"},

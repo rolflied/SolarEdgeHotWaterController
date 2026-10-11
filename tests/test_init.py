@@ -1,4 +1,5 @@
 """Tests for setup, migration, entities and actions."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
@@ -11,7 +12,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
-from custom_components.solaredge_hwc.api import SolarEdgeAuthError, SolarEdgeConnectionError
+from custom_components.solaredge_hwc.api import (
+    SolarEdgeAuthError,
+    SolarEdgeConnectionError,
+    SolarEdgeRateLimitError,
+)
 from custom_components.solaredge_hwc.const import (
     AUTH_COOKIE,
     CONF_AUTH_TYPE,
@@ -53,6 +58,10 @@ async def test_setup_creates_entities(
     assert hass.states.get(f"number.{prefix}_boost_duration").state == "60"
     assert hass.states.get(f"sensor.{prefix}_total_energy") is not None
     assert hass.states.get(f"sensor.{prefix}_next_scheduled_start").state != "unknown"
+    heater = hass.states.get(f"water_heater.{prefix}")
+    assert heater.state == "auto"
+    assert heater.attributes["current_temperature"] == 67.6
+    assert heater.attributes["operation_list"] == ["auto", "on", "off", "schedule"]
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     assert config_entry.state is ConfigEntryState.NOT_LOADED
@@ -148,20 +157,63 @@ async def test_switch_and_boost(
 async def test_actions(
     hass: HomeAssistant, config_entry: MockConfigEntry, mock_client: dict[str, AsyncMock]
 ) -> None:
-    """The actions reach the controller."""
+    """The actions reach the controller targeted by its water heater entity."""
     await _setup(hass, config_entry)
+    target = {"entity_id": "water_heater.solaredge_hot_water_controller"}
     await hass.services.async_call(
-        DOMAIN, "set_operation_mode", {"mode": "on", "level": 80, "duration": 30}, blocking=True
+        DOMAIN,
+        "set_operation_mode",
+        {**target, "mode": "on", "level": 80, "duration": 30},
+        blocking=True,
     )
     assert mock_client["set_state"].call_args.kwargs == {"level": 80, "duration": 1800}
 
+    await hass.services.async_call(DOMAIN, "boost", {**target, "duration": 10}, blocking=True)
+    assert mock_client["set_state"].call_args.kwargs == {"level": 100, "duration": 600}
+
+
+@pytest.mark.parametrize(
+    ("service", "data", "expected_mode", "expected_level"),
+    [
+        ("set_operation_mode", {"operation_mode": "schedule"}, "SCHEDULE", None),
+        ("turn_on", {}, "AUTO", None),
+        ("turn_off", {}, "MANUAL", 0),
+    ],
+)
+async def test_water_heater(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_client: dict[str, AsyncMock],
+    service: str,
+    data: dict,
+    expected_mode: str,
+    expected_level: int | None,
+) -> None:
+    """The water heater entity sends the matching activation state."""
+    await _setup(hass, config_entry)
     await hass.services.async_call(
-        DOMAIN,
-        "boost",
-        {"config_entry_id": config_entry.entry_id, "duration": 10},
+        "water_heater",
+        service,
+        {"entity_id": "water_heater.solaredge_hot_water_controller", **data},
         blocking=True,
     )
-    assert mock_client["set_state"].call_args.kwargs == {"level": 100, "duration": 600}
+    call = mock_client["set_state"].call_args
+    assert call.args[1] == expected_mode
+    assert call.kwargs.get("level") == expected_level
+
+
+async def test_rate_limit_delays_next_poll(
+    hass: HomeAssistant, config_entry: MockConfigEntry, mock_client: dict[str, AsyncMock]
+) -> None:
+    """HTTP 429 postpones the next poll by the requested time."""
+    await _setup(hass, config_entry)
+    coordinator = config_entry.runtime_data.coordinator
+    mock_client["get_state"].side_effect = SolarEdgeRateLimitError("slow down", 600)
+    await coordinator.async_refresh()
+    assert not coordinator.last_update_success
+    # The next poll is scheduled after the requested 600 s, not after 60 s
+    next_poll = coordinator._unsub_refresh.__self__.when() - hass.loop.time()
+    assert 590 < next_poll <= 601
 
 
 async def test_command_error(

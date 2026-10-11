@@ -11,16 +11,19 @@ of authenticating are supported:
 * ``CookieAuth`` reuses a session cookie copied from the browser. It cannot
   renew itself; once it expires the user has to paste a fresh one.
 """
+
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import asyncio
 import base64
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 import hashlib
+from html.parser import HTMLParser
 import json as jsonlib
 import logging
 import secrets
-from abc import ABC, abstractmethod
-from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
@@ -55,8 +58,41 @@ class SolarEdgeConnectionError(SolarEdgeError):
     """The portal could not be reached or failed temporarily."""
 
 
+class SolarEdgeRateLimitError(SolarEdgeConnectionError):
+    """The portal asked to slow down (HTTP 429)."""
+
+    def __init__(self, message: str, retry_after: float) -> None:
+        """Store how long to wait before the next request."""
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class SolarEdgeResponseError(SolarEdgeError):
     """The portal answered with something unexpected."""
+
+
+# Bounds for a Retry-After value sent by the portal, in seconds
+_RETRY_AFTER_DEFAULT = 300.0
+_RETRY_AFTER_MIN = 60.0
+_RETRY_AFTER_MAX = 3600.0
+
+
+def _retry_after(value: str | None) -> float:
+    """Turn a Retry-After header (seconds) into a sane delay."""
+    try:
+        seconds = float(value) if value else _RETRY_AFTER_DEFAULT
+    except ValueError:
+        # HTTP dates are allowed too; they are rare enough to use the default
+        seconds = _RETRY_AFTER_DEFAULT
+    return min(max(seconds, _RETRY_AFTER_MIN), _RETRY_AFTER_MAX)
+
+
+type LoginSessionFactory = Callable[[], AbstractAsyncContextManager[aiohttp.ClientSession]]
+
+
+def default_login_session() -> AbstractAsyncContextManager[aiohttp.ClientSession]:
+    """Create a short-lived session with a cookie jar for the login."""
+    return aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar())
 
 
 def _is_temporary(status: int) -> bool:
@@ -67,6 +103,7 @@ def _is_temporary(status: int) -> bool:
 # ---------------------------------------------------------------------------
 # Authentication strategies
 # ---------------------------------------------------------------------------
+
 
 class SolarEdgeAuth(ABC):
     """Supplies the authentication headers for API requests."""
@@ -92,7 +129,7 @@ class CookieAuth(SolarEdgeAuth):
         """Store the cookie string."""
         self._cookie = cookie.strip()
         if self._cookie.lower().startswith("cookie:"):
-            self._cookie = self._cookie[len("cookie:"):].strip()
+            self._cookie = self._cookie[len("cookie:") :].strip()
         self._csrf = _cookie_value(self._cookie, "CSRF-TOKEN")
 
     async def async_headers(self) -> dict[str, str]:
@@ -157,9 +194,16 @@ class OAuthAuth(SolarEdgeAuth):
         username: str,
         password: str,
         timeout: int,
+        login_session: LoginSessionFactory = default_login_session,
     ) -> None:
-        """Store the credentials."""
+        """
+        Store the credentials.
+
+        ``session`` sends the token requests; ``login_session`` creates the
+        short-lived session with a cookie jar the login form needs.
+        """
         self._session = session
+        self._login_session = login_session
         self._username = username
         self._password = password
         self._timeout = aiohttp.ClientTimeout(total=timeout)
@@ -229,25 +273,20 @@ class OAuthAuth(SolarEdgeAuth):
 
         # A dedicated session with a real cookie jar: the login page sets
         # cookies that have to be sent back with the credentials.
+        browser = {"User-Agent": USER_AGENT}
         try:
-            async with aiohttp.ClientSession(
-                cookie_jar=aiohttp.CookieJar(),
-                headers={"User-Agent": USER_AGENT},
-                timeout=self._timeout,
-            ) as login_session:
-                async with login_session.get(login_url) as resp:
+            async with self._login_session() as login_session:
+                async with login_session.get(
+                    login_url, headers=browser, timeout=self._timeout
+                ) as resp:
                     if _is_temporary(resp.status):
-                        raise SolarEdgeConnectionError(
-                            f"Login page returned HTTP {resp.status}"
-                        )
+                        raise SolarEdgeConnectionError(f"Login page returned HTTP {resp.status}")
                     page_url = str(resp.url)
                     parser = _FormParser()
                     parser.feed(await resp.text())
 
                 if not page_url.startswith(LOGIN_BASE_URL) or not parser.form_found:
-                    raise SolarEdgeResponseError(
-                        "SolarEdge login page has an unexpected format"
-                    )
+                    raise SolarEdgeResponseError("SolarEdge login page has an unexpected format")
 
                 form = {
                     key: value
@@ -261,16 +300,16 @@ class OAuthAuth(SolarEdgeAuth):
                     login_url,
                     data=form,
                     headers={
+                        **browser,
                         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
                         "Accept": "*/*",
                         "Origin": LOGIN_BASE_URL,
                         "Referer": page_url,
                     },
+                    timeout=self._timeout,
                 ) as resp:
                     if _is_temporary(resp.status):
-                        raise SolarEdgeConnectionError(
-                            f"Login returned HTTP {resp.status}"
-                        )
+                        raise SolarEdgeConnectionError(f"Login returned HTTP {resp.status}")
                     visited = [str(step.url) for step in resp.history]
                     visited.append(str(resp.url))
                     location = resp.headers.get("Location")
@@ -284,7 +323,9 @@ class OAuthAuth(SolarEdgeAuth):
                 )
                 if callback_url is None and visited[-1].startswith(LOGIN_BASE_URL):
                     # The Location of a 204 may point to another login step
-                    async with login_session.get(visited[-1]) as resp:
+                    async with login_session.get(
+                        visited[-1], headers=browser, timeout=self._timeout
+                    ) as resp:
                         if _is_temporary(resp.status):
                             raise SolarEdgeConnectionError(
                                 f"Login redirect returned HTTP {resp.status}"
@@ -301,8 +342,7 @@ class OAuthAuth(SolarEdgeAuth):
                         # The login page is served again: credentials rejected
                         raise SolarEdgeAuthError("Username or password rejected")
                     raise SolarEdgeResponseError(
-                        "Login ended on unexpected host "
-                        f"{urlparse(visited[-1]).netloc}"
+                        f"Login ended on unexpected host {urlparse(visited[-1]).netloc}"
                     )
 
                 code = (parse_qs(urlparse(callback_url).query).get("code") or [None])[0]
@@ -344,13 +384,9 @@ class OAuthAuth(SolarEdgeAuth):
                 timeout=self._timeout,
             ) as resp:
                 if _is_temporary(resp.status):
-                    raise SolarEdgeConnectionError(
-                        f"Token endpoint returned HTTP {resp.status}"
-                    )
+                    raise SolarEdgeConnectionError(f"Token endpoint returned HTTP {resp.status}")
                 if resp.status != 200:
-                    raise SolarEdgeAuthError(
-                        f"Token endpoint returned HTTP {resp.status}"
-                    )
+                    raise SolarEdgeAuthError(f"Token endpoint returned HTTP {resp.status}")
                 tokens = await resp.json(content_type=None)
         except (aiohttp.ClientError, TimeoutError) as err:
             raise SolarEdgeConnectionError(f"Token request failed: {err}") from err
@@ -365,6 +401,7 @@ class OAuthAuth(SolarEdgeAuth):
 # ---------------------------------------------------------------------------
 # API client
 # ---------------------------------------------------------------------------
+
 
 class SolarEdgeHWCClient:
     """Read and control load devices of one SolarEdge site."""
@@ -406,9 +443,7 @@ class SolarEdgeHWCClient:
 
     async def async_get_load_devices(self) -> list[dict[str, Any]]:
         """Return all load devices (hot water controllers, switches) of the site."""
-        data = await self._async_request(
-            "GET", PATH_DEVICES_LIST_INFO.format(site_id=self.site_id)
-        )
+        data = await self._async_request("GET", PATH_DEVICES_LIST_INFO.format(site_id=self.site_id))
         if not isinstance(data, dict):
             raise SolarEdgeResponseError("Device list response is not an object")
         devices = (data.get("devicesByType") or {}).get("LOAD_DEVICE") or []
@@ -483,10 +518,13 @@ class SolarEdgeHWCClient:
                 if 300 <= resp.status < 400:
                     # An expired session gets redirected to the login page
                     return 401, None
-                if _is_temporary(resp.status):
-                    raise SolarEdgeConnectionError(
-                        f"{method} {path} returned HTTP {resp.status}"
+                if resp.status == 429:
+                    raise SolarEdgeRateLimitError(
+                        f"{method} {path} was rate limited",
+                        _retry_after(resp.headers.get("Retry-After")),
                     )
+                if _is_temporary(resp.status):
+                    raise SolarEdgeConnectionError(f"{method} {path} returned HTTP {resp.status}")
                 if resp.status >= 400:
                     body = (await resp.text())[:200]
                     raise SolarEdgeResponseError(
@@ -505,4 +543,3 @@ class SolarEdgeHWCClient:
             if text.lstrip().startswith("<"):
                 return 401, None
             raise SolarEdgeResponseError(f"{method} {path} returned no JSON") from err
-

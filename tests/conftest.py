@@ -1,4 +1,5 @@
 """Fixtures for the SolarEdge Hot Water Controller tests."""
+
 from __future__ import annotations
 
 from collections.abc import Generator

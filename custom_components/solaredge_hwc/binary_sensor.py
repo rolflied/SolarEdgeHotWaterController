@@ -1,4 +1,5 @@
 """Binary sensor platform for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -12,7 +13,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SolarEdgeHWCConfigEntry
 from .coordinator import HWCData
@@ -66,13 +67,11 @@ BINARY_SENSORS: tuple[HWCBinarySensorDescription, ...] = (
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SolarEdgeHWCConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up SolarEdge HWC binary sensors."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(
-        HWCBinarySensor(coordinator, description) for description in BINARY_SENSORS
-    )
+    async_add_entities(HWCBinarySensor(coordinator, description) for description in BINARY_SENSORS)
 
 
 class HWCBinarySensor(SolarEdgeHWCEntity, BinarySensorEntity):

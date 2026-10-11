@@ -12,6 +12,7 @@ Usage:
 
 The rendered PNGs are written to custom_components/solaredge_hwc/brand/.
 """
+
 from __future__ import annotations
 
 import math
@@ -30,8 +31,8 @@ OUT_DIR = os.path.join(
 SS = 4
 
 # Colours
-SUN_TOP = (255, 196, 61)      # warm amber, top left of the gradient
-SUN_BOTTOM = (229, 66, 42)    # deep orange-red, bottom right
+SUN_TOP = (255, 196, 61)  # warm amber, top left of the gradient
+SUN_BOTTOM = (229, 66, 42)  # deep orange-red, bottom right
 DROP = (255, 255, 255)
 BOLT = (226, 74, 40)
 TEXT_DARK = (28, 33, 40)
@@ -65,9 +66,7 @@ def _diagonal_gradient(size: int, start, end) -> Image.Image:
         for x in range(size):
             # 0 at the top-left corner, 1 at the bottom-right corner
             t = (x + y) / (2 * (size - 1))
-            pixels[x, y] = tuple(
-                round(start[i] + (end[i] - start[i]) * t) for i in range(3)
-            )
+            pixels[x, y] = tuple(round(start[i] + (end[i] - start[i]) * t) for i in range(3))
     return gradient
 
 

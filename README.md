@@ -10,14 +10,14 @@ The integration UI is available in **English** (default) and **German**.
 
 - Live values: power, heating level, water temperature, activation mode, reason the heater is off, device status
 - Energy counter for the **Energy dashboard** (integrated from the power, survives restarts)
-- **Control**: operating mode (Automatic / On / Off / Schedule), manual heating switch, boost with adjustable duration and level
+- **Control**: water heater entity for the thermostat card, operating mode (Automatic / On / Off / Schedule), manual heating switch, boost with adjustable duration and level
 - **Actions** `solaredge_hwc.set_operation_mode` and `solaredge_hwc.boost` for automations, e.g. "heat for 30 minutes at 50 %"
 - Login with **username and password** (token renewed automatically) or with a **browser cookie**
 - Automatic device discovery, reauthentication when the login expires, reconfiguration after a hardware swap, diagnostics download
 
 ## Prerequisites
 
-- Home Assistant 2024.12 or newer (2026.3+ shows the integration icon)
+- Home Assistant **2026.10** or newer
 - A SolarEdge monitoring account with access to the Hot Water Controller
 - Your **Site ID** (the number in the portal URL, e.g. `…/v/s/XXXXXXX/…`)
 
@@ -60,6 +60,7 @@ The cookie expires after some time. Home Assistant then shows a **repair notice*
 
 | Entity | Type | Description |
 |--------|------|-------------|
+| *(device name)* | water heater | Operating mode and water temperature for the thermostat card. On = automatic, Off = heating element off. No target temperature (SolarEdge offers none) |
 | Operating mode | select | Automatic / On / Off / Schedule |
 | Manual heating | switch | On = heat manually at the *Manual heating level*. Off = back to automatic (or stay off, see options) |
 | Boost | button | Heat at the *Manual heating level* for the *Boost duration*, then return to the previous mode |
@@ -79,9 +80,13 @@ The cookie expires after some time. Home Assistant then shows a **repair notice*
 
 ### Actions
 
+Both actions target the water heater entity of a controller, so the automation editor offers the usual entity, device and area picker.
+
 ```yaml
 # Heat for 30 minutes at 50 %, then return to the previous mode
 action: solaredge_hwc.set_operation_mode
+target:
+  entity_id: water_heater.solaredge_hot_water_controller
 data:
   mode: "on"
   level: 50
@@ -89,9 +94,11 @@ data:
 
 # Boost with the configured defaults
 action: solaredge_hwc.boost
+target:
+  entity_id: water_heater.solaredge_hot_water_controller
 ```
 
-`config_entry_id` is only needed if more than one controller is set up.
+The standard actions `water_heater.set_operation_mode`, `water_heater.turn_on` and `water_heater.turn_off` work as well.
 
 ### How control works
 
@@ -118,6 +125,8 @@ Enter the new Device ID (and Site ID if it changed) under **Reconfigure**. The e
 
 ## Upgrading from 1.x
 
+- Home Assistant 2026.10 or newer is required.
+
 - Entries are migrated automatically. The entities keep their entity IDs and history; their internal unique IDs now include the config entry, so two controllers no longer collide.
 - **The *Activation mode* and *Device status* sensors now report fixed keys** (`auto`, `manual`, `active` …) that the UI translates. Automations comparing against the old texts (`Automatic`, `Online` …) need updating, or can use the `raw_mode` / `raw_status` attributes.
 - *Device online* now also counts the status `ACTIVE` as online (reported by current controllers).
@@ -130,6 +139,8 @@ Enter the new Device ID (and Site ID if it changed) under **Reconfigure**. The e
 - Login flow and control endpoint follow the community projects [barnold89/solaredge_hotwater](https://github.com/barnold89/solaredge_hotwater) and [karuzo17/solaredge-api-home-assistant](https://github.com/karuzo17/solaredge-api-home-assistant) (both MIT).
 
 ## Development
+
+Tests run against Home Assistant 2026.10 on Python 3.14.
 
 ```bash
 pip install -r requirements_test.txt
@@ -144,6 +155,8 @@ Die Oberfläche der Integration ist vollständig ins Deutsche übersetzt. Ist Ho
 
 ### Kurzanleitung
 
+Voraussetzung ist Home Assistant **2026.10** oder neuer.
+
 1. Integration installieren (HACS als benutzerdefiniertes Repository oder manuell) und Home Assistant neu starten
 2. **Einstellungen → Geräte & Dienste → Integration hinzufügen → SolarEdge Hot Water Controller**
 3. Anmeldeart wählen:
@@ -155,7 +168,8 @@ Die Oberfläche der Integration ist vollständig ins Deutsche übersetzt. Ist Ho
 - **Betriebsart** (Auswahl): Automatik / Ein / Aus / Zeitplan
 - **Manuell heizen** (Schalter): heizt mit der *Heizstufe manuell*; beim Ausschalten zurück in den Automatikbetrieb (oder aus bleiben, siehe Optionen)
 - **Boost** (Taste): heizt für die *Boost-Dauer* und kehrt danach in die vorherige Betriebsart zurück
-- Aktionen `solaredge_hwc.set_operation_mode` und `solaredge_hwc.boost` für Automatisierungen, z. B. „30 Minuten mit 50 % heizen“
+- **Warmwasserbereiter-Entität** (Name = Gerätename) für die Thermostatkarte: Betriebsart und Wassertemperatur; Ein = Automatik, Aus = Heizstab aus. Eine Solltemperatur gibt es nicht, weil SolarEdge keine anbietet.
+- Aktionen `solaredge_hwc.set_operation_mode` und `solaredge_hwc.boost` für Automatisierungen, z. B. „30 Minuten mit 50 % heizen“. Ziel ist die Warmwasserbereiter-Entität bzw. das Gerät.
 
 Zeitpläne und die PV-Überschuss-Einstellung lassen sich nur lesen.
 

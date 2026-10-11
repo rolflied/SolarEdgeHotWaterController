@@ -1,9 +1,10 @@
 """Select platform: operating mode of the hot water controller."""
+
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SolarEdgeHWCConfigEntry
 from .const import OPERATION_MODES
@@ -16,7 +17,7 @@ PARALLEL_UPDATES = 1
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: SolarEdgeHWCConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the operating mode select."""
     async_add_entities([HWCOperationModeSelect(entry.runtime_data.coordinator)])

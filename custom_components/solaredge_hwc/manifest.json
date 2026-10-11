@@ -1,7 +1,9 @@
 {
   "domain": "solaredge_hwc",
   "name": "SolarEdge Hot Water Controller",
-  "codeowners": ["@rolflied"],
+  "codeowners": [
+    "@rolflied"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/rolflied/SolarEdgeHotWaterController",

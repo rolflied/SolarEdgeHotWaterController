@@ -1,4 +1,5 @@
 """Diagnostics support for SolarEdge Hot Water Controller."""
+
 from __future__ import annotations
 
 from typing import Any
