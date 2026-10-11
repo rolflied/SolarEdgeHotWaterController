@@ -1,116 +1,174 @@
 # SolarEdge Hot Water Controller – Home Assistant Integration
 
-> **Disclaimer:** This is an **unofficial**, community-maintained integration and is **not affiliated with, endorsed by, or supported by SolarEdge Technologies**. Use at your own risk.
+> **Disclaimer:** This is an **unofficial**, community-maintained integration and is **not affiliated with, endorsed by, or supported by SolarEdge Technologies**. It uses the internal API of the SolarEdge monitoring portal, which SolarEdge does not document and may change at any time. Use at your own risk.
 
-Custom integration for Home Assistant to read data from a SolarEdge Hot Water Controller (HWC) via the SolarEdge monitoring portal.
+Custom integration for Home Assistant that reads **and controls** a SolarEdge Home Hot Water Controller (HWC, e.g. `SMRT-HOT-WTR-…`) through the SolarEdge monitoring portal.
 
 The integration UI is available in **English** (default) and **German**.
 
+## Features
+
+- Live values: power, heating level, water temperature, activation mode, reason the heater is off, device status
+- Energy counter for the **Energy dashboard** (integrated from the power, survives restarts)
+- **Control**: operating mode (Automatic / On / Off / Schedule), manual heating switch, boost with adjustable duration and level
+- **Actions** `solaredge_hwc.set_operation_mode` and `solaredge_hwc.boost` for automations, e.g. "heat for 30 minutes at 50 %"
+- Login with **username and password** (token renewed automatically) or with a **browser cookie**
+- Automatic device discovery, reauthentication when the login expires, reconfiguration after a hardware swap, diagnostics download
+
 ## Prerequisites
 
-- Home Assistant (recommended: 2024.12+, 2026.3+ for the integration icon)
-- A SolarEdge account with access to the Hot Water Controller
-- Site ID and Device ID from the SolarEdge monitoring portal
-- Browser cookie string (see below)
+- Home Assistant 2024.12 or newer (2026.3+ shows the integration icon)
+- A SolarEdge monitoring account with access to the Hot Water Controller
+- Your **Site ID** (the number in the portal URL, e.g. `…/v/s/XXXXXXX/…`)
 
 ## Installation
 
-### Manual
-
-1. Copy the `custom_components/solaredge_hwc/` folder into your Home Assistant `custom_components/` directory.
-2. Restart Home Assistant.
-3. In the HA UI: **Settings → Integrations → Add Integration → SolarEdge Hot Water Controller**
-
 ### HACS (custom repository)
 
-1. Open HACS → three-dot menu → **Custom Repositories**
+1. Open HACS → three-dot menu → **Custom repositories**
 2. Enter this repository URL, category: **Integration**
 3. Install the integration and restart Home Assistant
 
-## Configuration
+### Manual
 
-The setup flow asks for the following fields:
+1. Copy `custom_components/solaredge_hwc/` into your Home Assistant `custom_components/` directory.
+2. Restart Home Assistant.
 
-| Field | Description |
-|-------|-------------|
-| **Site ID** | Numeric ID of your site (from the URL in the SolarEdge portal) |
-| **Device ID** | Numeric ID of the HWC device |
-| **Cookie** | Full browser cookie string (see below) |
-| **Update interval** | Seconds between API polls (default: 60, min: 30, max: 600) |
-| **Timeout** | Seconds until connection timeout (default: 30) |
+Then add it under **Settings → Devices & services → Add integration → SolarEdge Hot Water Controller**.
 
-### How to get the cookie
+## Setup
 
-Since SolarEdge does not provide an official API with key-based authentication, a browser session cookie is required:
+The first dialog asks how the integration should log in.
 
-1. Log in to [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser
-2. Navigate to your device page: **Smart Energy → Hot Water**
-3. Open developer tools (F12) → **Network** tab
-4. Reload the page, select a request to `monitoring.solaredge.com`
-5. In the request headers, copy the full value of the `Cookie:` header
+### Username and password (recommended)
 
-> **Note:** The cookie expires after some time. When authentication fails, Home Assistant will show a banner automatically. You can update the cookie under **Settings → Integrations → SolarEdge HWC → Configure**.
+Enter the email address and password of your SolarEdge account and the Site ID. The integration logs in the same way the web portal does (OAuth2 with PKCE), keeps the access token in memory and renews it on its own. All load devices of the site are listed; with a single device it is picked automatically.
 
-All setup fields, including Site ID and Device ID, can be changed later; see [Changing the configuration](#changing-the-configuration).
+The password is stored in the Home Assistant configuration so that the login can be renewed. Accounts with two-factor authentication or a CAPTCHA cannot log in this way; use the cookie method for those.
 
-## Provided entities
+### Browser cookie
 
-### Sensors
+1. Log in to [monitoring.solaredge.com](https://monitoring.solaredge.com) and open **Smart Energy → Hot Water**
+2. Open the developer tools (F12) → **Network** tab, reload the page
+3. Select a request to `monitoring.solaredge.com` and copy the full value of the `Cookie:` request header
 
-| Name | Description | Unit |
-|------|-------------|------|
-| Power | Current heating power | W |
-| Heating level | Current heating level / percentage | % |
-| Activation mode | MANUAL / AUTO / SMART_ENERGY / SCHEDULE | – |
-| Device status | ONLINE / OFFLINE / ERROR | – |
-| Total energy | Total consumed energy | Wh |
+The Device ID is optional: if you leave it empty, the devices of the site are detected. Otherwise it is the second number in the request `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`.
 
-### Binary sensors
+The cookie expires after some time. Home Assistant then shows a **repair notice**; paste a fresh cookie there.
 
-| Name | Description |
-|------|-------------|
-| Heating active | `true` when power > 10 W |
-| Device online | `true` when device status is ONLINE |
+## Entities
 
-## Changing the configuration
+| Entity | Type | Description |
+|--------|------|-------------|
+| Operating mode | select | Automatic / On / Off / Schedule |
+| Manual heating | switch | On = heat manually at the *Manual heating level*. Off = back to automatic (or stay off, see options) |
+| Boost | button | Heat at the *Manual heating level* for the *Boost duration*, then return to the previous mode |
+| Manual heating level | number (config) | 1–100 %, used by switch, select ("On") and boost |
+| Boost duration | number (config) | 5–1440 minutes |
+| Power | sensor | Measured power in W; if the controller sends no reading it is estimated from rated power × level (attribute `estimated`) |
+| Heating level | sensor | Current level in % |
+| Water temperature | sensor | °C, only for controllers with a temperature probe |
+| Activation mode | sensor (enum) | `auto`, `manual`, `schedule`, `smart_energy`, `off` |
+| Reason heating is off | sensor | e.g. `pending_excess_solar` |
+| Total energy | sensor | Wh/kWh, `total_increasing`, for the Energy dashboard |
+| Next scheduled start | sensor | Next start of an enabled time schedule; attribute `schedules` lists all schedules |
+| Manual heating until | sensor | End of a timed manual run started from Home Assistant |
+| Heating active | binary sensor | Heating element is on |
+| Device online, Excess solar heating, Schedule enabled | binary sensor (diagnostic) | |
+| Device status, Schedule type, Rated power | sensor (diagnostic) | |
 
-Site ID, Device ID, cookie, update interval and timeout can all be changed after setup, either
-under **Settings → Integrations → SolarEdge HWC → Configure** or via **Reconfigure** in the
-three-dot menu of the integration entry. Leave the cookie field empty to keep the existing cookie.
+### Actions
 
-The new values are checked against the API before they are stored, so a typo in the Site ID or a
-cookie that has already expired is rejected right in the dialog.
+```yaml
+# Heat for 30 minutes at 50 %, then return to the previous mode
+action: solaredge_hwc.set_operation_mode
+data:
+  mode: "on"
+  level: 50
+  duration: 30
+
+# Boost with the configured defaults
+action: solaredge_hwc.boost
+```
+
+`config_entry_id` is only needed if more than one controller is set up.
+
+### How control works
+
+All commands go to `PUT /services/m/api/homeautomation/v1.0/{site}/devices/{device}/activationState` with `{"mode", "level", "duration"}`:
+
+| Operating mode | Request |
+|----------------|---------|
+| Automatic | `AUTO` |
+| Schedule | `SCHEDULE` |
+| Off | `MANUAL`, level 0 |
+| On | `MANUAL`, level = manual heating level, no duration |
+| Boost / On with duration | `MANUAL`, level, duration in seconds |
+
+Schedules and the excess-PV setting can only be read; SolarEdge offers no known endpoint to change them.
+
+## Options and changing the configuration
+
+- **Configure** (options): update interval (30–600 s, default 60), request timeout, and what the *Manual heating* switch does when turned off.
+- **Reconfigure** (three-dot menu): switch between password and cookie login, change account, cookie, Site ID or Device ID. Empty password/cookie fields keep the stored value. Everything is checked against the API before it is saved.
 
 ### After replacing the controller
 
-If the hardware was replaced, enter the new Site ID and Device ID in that dialog. The integration
-moves the existing device to the new ID instead of creating a second one, so all entities keep
-their entity IDs, their history and their long-term statistics, and dashboards and automations
-keep working unchanged.
+Enter the new Device ID (and Site ID if it changed) under **Reconfigure**. The existing device is moved to the new ID, so all entities keep their entity IDs, history and long-term statistics.
+
+## Upgrading from 1.x
+
+- Entries are migrated automatically. The entities keep their entity IDs and history; their internal unique IDs now include the config entry, so two controllers no longer collide.
+- **The *Activation mode* and *Device status* sensors now report fixed keys** (`auto`, `manual`, `active` …) that the UI translates. Automations comparing against the old texts (`Automatic`, `Online` …) need updating, or can use the `raw_mode` / `raw_status` attributes.
+- *Device online* now also counts the status `ACTIVE` as online (reported by current controllers).
+- Update interval and timeout moved from the entry data to the options.
 
 ## Notes
 
-- This integration uses the unofficial SolarEdge monitoring API – changes by SolarEdge may affect functionality.
-- Do not set the polling interval too low to avoid being rate-limited by SolarEdge (recommended: >= 60 seconds).
+- Do not set the polling interval too low to avoid being rate-limited (recommended ≥ 60 s).
+- *Diagnostics* (device page → three-dot menu) download the raw API answers with credentials and serial number removed – useful for bug reports.
+- Login flow and control endpoint follow the community projects [barnold89/solaredge_hotwater](https://github.com/barnold89/solaredge_hotwater) and [karuzo17/solaredge-api-home-assistant](https://github.com/karuzo17/solaredge-api-home-assistant) (both MIT).
+
+## Development
+
+```bash
+pip install -r requirements_test.txt
+pytest
+```
 
 ---
 
 ## Deutsche Anleitung
 
-Eine vollständige deutsche Übersetzung der Benutzeroberfläche ist in der Integration enthalten. Wenn Home Assistant auf Deutsch eingestellt ist, werden alle Konfigurationsdialoge und Entitätsnamen automatisch auf Deutsch angezeigt.
+Die Oberfläche der Integration ist vollständig ins Deutsche übersetzt. Ist Home Assistant auf Deutsch eingestellt, erscheinen Dialoge, Entitäten und Aktionen automatisch auf Deutsch.
 
 ### Kurzanleitung
 
-1. Integration installieren (manuell oder über HACS als benutzerdefiniertes Repository)
-2. **Einstellungen → Integrationen → Integration hinzufügen → SolarEdge Hot Water Controller**
-3. Site-ID, Geräte-ID und Browser-Cookie eingeben
-4. Cookie bei Ablauf unter **Einstellungen → Integrationen → SolarEdge HWC → Konfigurieren** erneuern
+1. Integration installieren (HACS als benutzerdefiniertes Repository oder manuell) und Home Assistant neu starten
+2. **Einstellungen → Geräte & Dienste → Integration hinzufügen → SolarEdge Hot Water Controller**
+3. Anmeldeart wählen:
+   - **Benutzername und Passwort** (empfohlen): E-Mail, Passwort und Site-ID eingeben. Die Anmeldung wird automatisch erneuert. Konten mit Zwei-Faktor-Anmeldung funktionieren so nicht.
+   - **Browser-Cookie**: Site-ID und Cookie eingeben, die Geräte-ID ist optional. Läuft das Cookie ab, meldet Home Assistant das als Reparaturhinweis.
+
+### Steuerung
+
+- **Betriebsart** (Auswahl): Automatik / Ein / Aus / Zeitplan
+- **Manuell heizen** (Schalter): heizt mit der *Heizstufe manuell*; beim Ausschalten zurück in den Automatikbetrieb (oder aus bleiben, siehe Optionen)
+- **Boost** (Taste): heizt für die *Boost-Dauer* und kehrt danach in die vorherige Betriebsart zurück
+- Aktionen `solaredge_hwc.set_operation_mode` und `solaredge_hwc.boost` für Automatisierungen, z. B. „30 Minuten mit 50 % heizen“
+
+Zeitpläne und die PV-Überschuss-Einstellung lassen sich nur lesen.
+
+### Energie-Dashboard
+
+Der Sensor *Gesamtenergie* summiert die Leistung über die Zeit auf und bleibt über Neustarts erhalten. Er lässt sich im Energie-Dashboard als Verbraucher eintragen.
 
 ### Gerät ausgetauscht
 
-Site-ID und Geräte-ID lassen sich nachträglich im selben Dialog ändern, ebenso über **Neu
-konfigurieren** im Drei-Punkte-Menü. Die Integration übernimmt das vorhandene Gerät auf die neue
-ID, statt ein zweites anzulegen. Die Entitäten behalten dadurch ihre Entitäts-IDs, ihren Verlauf
-und ihre Langzeitstatistiken, Dashboards und Automatisierungen laufen unverändert weiter.
+Unter **Neu konfigurieren** im Drei-Punkte-Menü die neue Geräte-ID eintragen. Das vorhandene Gerät wird auf die neue ID übernommen, die Entitäten behalten Entitäts-IDs, Verlauf und Langzeitstatistiken.
+
+### Umstieg von Version 1.x
+
+Bestehende Einträge werden automatisch migriert. Die Sensoren *Aktivierungsmodus* und *Gerätestatus* liefern jetzt feste Schlüssel (`auto`, `manual`, `active` …), die die Oberfläche übersetzt. Automatisierungen, die auf die alten Texte vergleichen, müssen angepasst werden oder die Attribute `raw_mode` / `raw_status` verwenden.
 
 > **Hinweis:** Dies ist eine **inoffizielle** Integration und steht in **keiner Verbindung zu SolarEdge Technologies**. Nutzung auf eigene Verantwortung.

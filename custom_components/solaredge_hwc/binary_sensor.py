@@ -1,135 +1,93 @@
 """Binary sensor platform for SolarEdge Hot Water Controller."""
 from __future__ import annotations
 
-import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import (
-    DOMAIN,
-    HEATING_POWER_THRESHOLD_W,
-    STATUS_ONLINE,
-    STATUS_CONNECTED,
-    ICON_WATER_BOILER,
-    ICON_WATER_BOILER_OFF,
-    ICON_CHECK_NETWORK,
-    ICON_NETWORK_OFF,
+from . import SolarEdgeHWCConfigEntry
+from .coordinator import HWCData
+from .entity import SolarEdgeHWCEntity
+
+PARALLEL_UPDATES = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class HWCBinarySensorDescription(BinarySensorEntityDescription):
+    """Describes a SolarEdge HWC binary sensor."""
+
+    value_fn: Callable[[HWCData], bool | None]
+    attrs_fn: Callable[[HWCData], dict[str, Any]] | None = None
+
+
+BINARY_SENSORS: tuple[HWCBinarySensorDescription, ...] = (
+    HWCBinarySensorDescription(
+        key="heating_active",
+        translation_key="heating_active",
+        device_class=BinarySensorDeviceClass.RUNNING,
+        value_fn=lambda d: d.heating,
+    ),
+    HWCBinarySensorDescription(
+        key="device_online",
+        translation_key="device_online",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.online,
+        attrs_fn=lambda d: {
+            "device_status": d.device_status,
+            "communication_status": d.state.get("portiaCommunicationStatus"),
+        },
+    ),
+    HWCBinarySensorDescription(
+        key="excess_pv",
+        translation_key="excess_pv",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.excess_pv_enabled,
+    ),
+    HWCBinarySensorDescription(
+        key="schedule_enabled",
+        translation_key="schedule_enabled",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: any(item.get("enable") for item in d.schedules),
+        attrs_fn=lambda d: {"schedule_count": len(d.schedules)},
+    ),
 )
-from .coordinator import SolarEdgeHWCCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: SolarEdgeHWCConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up SolarEdge HWC binary sensors."""
-    coordinator: SolarEdgeHWCCoordinator = hass.data[DOMAIN][entry.entry_id]
-
+    coordinator = entry.runtime_data.coordinator
     async_add_entities(
-        [
-            HWCHeatingActiveSensor(coordinator, entry),
-            HWCDeviceOnlineSensor(coordinator, entry),
-        ]
+        HWCBinarySensor(coordinator, description) for description in BINARY_SENSORS
     )
 
 
-# ---------------------------------------------------------------------------
-# Base class
-# ---------------------------------------------------------------------------
+class HWCBinarySensor(SolarEdgeHWCEntity, BinarySensorEntity):
+    """A binary sensor whose value comes from the coordinator data."""
 
-class SolarEdgeHWCBinarySensorBase(CoordinatorEntity, BinarySensorEntity):
-    """Base class for SolarEdge HWC binary sensors."""
-
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: SolarEdgeHWCCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize the binary sensor."""
-        super().__init__(coordinator)
-        self._entry = entry
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, coordinator.device_id)},
-            "name": "SolarEdge Hot Water Controller",
-            "manufacturer": "SolarEdge",
-            "model": "Home Hot Water Controller",
-            "configuration_url": (
-                f"https://monitoring.solaredge.com/v/s/"
-                f"{coordinator.site_id}/smart-energy/hot-water"
-            ),
-        }
+    entity_description: HWCBinarySensorDescription
 
     @property
-    def hwc_data(self) -> dict[str, Any]:
-        """Return coordinator data, or empty dict if unavailable."""
-        return self.coordinator.data if self.coordinator.data else {}
-
-
-# ---------------------------------------------------------------------------
-# Heating active
-# ---------------------------------------------------------------------------
-
-class HWCHeatingActiveSensor(SolarEdgeHWCBinarySensorBase):
-    """
-    Binary sensor: is the hot water controller currently drawing power?
-
-    True  → currently heating (activePowerMeter > threshold)
-    False → idle / off
-    """
-
-    _attr_translation_key = "heating_active"
-    _attr_unique_id = "se_hwc_heating_active"
-    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    def is_on(self) -> bool | None:
+        """Return the state."""
+        return self.entity_description.value_fn(self.hwc)
 
     @property
-    def is_on(self) -> bool:
-        """Return True if the controller is actively heating."""
-        measurements = self.hwc_data.get("measurements", {})
-        power = float(measurements.get("activePowerMeter", 0.0))
-        return power > HEATING_POWER_THRESHOLD_W
-
-    @property
-    def icon(self) -> str:
-        """Show an active or inactive boiler icon."""
-        return ICON_WATER_BOILER if self.is_on else ICON_WATER_BOILER_OFF
-
-
-# ---------------------------------------------------------------------------
-# Device online
-# ---------------------------------------------------------------------------
-
-class HWCDeviceOnlineSensor(SolarEdgeHWCBinarySensorBase):
-    """
-    Binary sensor: is the device reachable / online?
-
-    True  → device reports ONLINE or CONNECTED
-    False → OFFLINE, DISCONNECTED, or any other status
-    """
-
-    _attr_translation_key = "device_online"
-    _attr_unique_id = "se_hwc_device_online"
-    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-
-    @property
-    def is_on(self) -> bool:
-        """Return True if the device is online."""
-        status = self.hwc_data.get("deviceStatus", "")
-        return status in (STATUS_ONLINE, STATUS_CONNECTED)
-
-    @property
-    def icon(self) -> str:
-        """Show the appropriate network icon."""
-        return ICON_CHECK_NETWORK if self.is_on else ICON_NETWORK_OFF
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return extra attributes."""
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.hwc)

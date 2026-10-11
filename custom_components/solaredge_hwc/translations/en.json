@@ -1,82 +1,147 @@
 {
   "config": {
     "step": {
-      "reconfigure": {
-        "title": "SolarEdge HWC – Change configuration",
-        "description": "Currently configured: site **{site_id}**, device **{device_id}**.\n\nUpdate the cookie when it has expired, or change **Site ID** and **Device ID** if the controller was replaced. The entities keep their entity IDs and their history.\n\n**How to get a fresh cookie:**\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. Press F12 → Network tab → click any request\n3. In the request headers, copy the full `Cookie:` value\n\nLeave the cookie field empty to keep the current cookie.",
-        "data": {
-          "site_id": "Site ID",
-          "device_id": "Device ID",
-          "cookie": "New browser cookie (leave blank to keep current)",
-          "scan_interval": "Update interval (seconds)",
-          "timeout": "Request timeout (seconds)"
-        },
-        "data_description": {
-          "site_id": "Numeric ID from the monitoring URL: .../site/XXXXXXX/...",
-          "device_id": "Numeric device ID. After replacing the controller, enter the new ID here.",
-          "cookie": "Paste the full Cookie header value. Leave blank to keep the existing cookie.",
-          "scan_interval": "How often to poll the API (min. 30 s, recommended 60 s)",
-          "timeout": "Max. seconds to wait for an API response"
-        }
-      },
       "user": {
         "title": "SolarEdge Hot Water Controller",
-        "description": "Connect to your SolarEdge Hot Water Controller. You need your **Site ID**, **Device ID** and a **browser session cookie** from the SolarEdge monitoring portal.\n\n**How to get the Device ID:**\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. Navigate to your site → Smart Energy → Hot Water\n3. Press F12 → Network tab → reload the page\n4. Look for a request to `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`\n5. Use the numbers: Site ID = XXXXXX, Device ID = YYYYYYYY\n\n**How to get the Cookie:**\n1. In F12 → Network → click any request to monitoring.solaredge.com\n2. In the request headers, find the `Cookie:` header\n3. Copy the entire value (everything after `Cookie: `)",
+        "description": "How should the integration log in to the SolarEdge monitoring portal?\n\n**Username and password** is recommended: the integration logs in by itself and renews its access automatically.\n\nA **browser cookie** expires after some time and then has to be copied again.",
+        "menu_options": {
+          "credentials": "Username and password (recommended)",
+          "cookie": "Browser cookie"
+        }
+      },
+      "credentials": {
+        "title": "Log in with your SolarEdge account",
+        "description": "Use the account you log in with at [monitoring.solaredge.com](https://monitoring.solaredge.com). Accounts with two-factor authentication are not supported; use the cookie method for those.\n\nThe Site ID is the number in the portal URL: `.../v/s/XXXXXXX/...`. All hot water controllers of the site are found automatically.",
+        "data": {
+          "username": "Email address",
+          "password": "Password",
+          "site_id": "Site ID"
+        },
+        "data_description": {
+          "username": "Email address of your SolarEdge account",
+          "password": "Stored in Home Assistant to renew the login automatically",
+          "site_id": "Numeric ID from the monitoring URL: .../s/XXXXXXX/..."
+        }
+      },
+      "cookie": {
+        "title": "Log in with a browser cookie",
+        "description": "1. Log in to [monitoring.solaredge.com](https://monitoring.solaredge.com) and open **Smart Energy → Hot Water**\n2. Press F12 → **Network** tab → reload the page\n3. Click a request to `monitoring.solaredge.com` and copy the full value of the `Cookie:` request header\n\nThe Device ID is the second number in the request `/services/m/so/load-device/site/XXXXXX/device/YYYYYYYY/state`. Leave it empty to find the devices of the site automatically.",
         "data": {
           "site_id": "Site ID",
           "device_id": "Device ID",
-          "cookie": "Browser Session Cookie",
-          "scan_interval": "Update interval (seconds)",
-          "timeout": "Request timeout (seconds)"
+          "cookie": "Browser cookie"
         },
         "data_description": {
-          "site_id": "Numeric ID from the monitoring URL: .../site/XXXXXXX/...",
-          "device_id": "Numeric device ID from the network request URL",
-          "cookie": "Full Cookie header value from browser DevTools (F12 → Network → request headers → Cookie)",
-          "scan_interval": "How often to poll the API (min. 30 s, recommended 60 s)",
-          "timeout": "Max. seconds to wait for an API response"
+          "site_id": "Numeric ID from the monitoring URL: .../s/XXXXXXX/...",
+          "device_id": "Optional. Leave empty to detect it automatically.",
+          "cookie": "Full value of the Cookie request header (F12 → Network → request headers)"
+        }
+      },
+      "select_device": {
+        "title": "Choose the device",
+        "description": "Several load devices were found on this site. Which one is the hot water controller?",
+        "data": {
+          "device_id": "Device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Log in again",
+        "description": "SolarEdge rejected the stored login. Enter the current password, or paste a fresh cookie from your browser.",
+        "data": {
+          "username": "Email address",
+          "password": "Password",
+          "cookie": "Browser cookie"
+        },
+        "data_description": {
+          "cookie": "Full value of the Cookie request header (F12 → Network → request headers)"
+        }
+      },
+      "reconfigure": {
+        "title": "SolarEdge HWC – change configuration",
+        "description": "Currently configured: site **{site_id}**, device **{device_id}**. How should the integration log in?",
+        "menu_options": {
+          "reconfigure_credentials": "Username and password (recommended)",
+          "reconfigure_cookie": "Browser cookie"
+        }
+      },
+      "reconfigure_credentials": {
+        "title": "SolarEdge HWC – change configuration",
+        "description": "Currently configured: site **{site_id}**, device **{device_id}**.\n\nChange the account, or **Site ID** and **Device ID** after replacing the controller. The entities keep their entity IDs and their history.",
+        "data": {
+          "username": "Email address",
+          "password": "Password (leave blank to keep current)",
+          "site_id": "Site ID",
+          "device_id": "Device ID"
+        },
+        "data_description": {
+          "password": "Leave blank to keep the stored password.",
+          "site_id": "Numeric ID from the monitoring URL: .../s/XXXXXXX/...",
+          "device_id": "After replacing the controller, enter the new ID here."
+        }
+      },
+      "reconfigure_cookie": {
+        "title": "SolarEdge HWC – change configuration",
+        "description": "Currently configured: site **{site_id}**, device **{device_id}**.\n\nPaste a fresh cookie when the old one has expired, or change **Site ID** and **Device ID** after replacing the controller. The entities keep their entity IDs and their history.",
+        "data": {
+          "site_id": "Site ID",
+          "device_id": "Device ID",
+          "cookie": "New browser cookie (leave blank to keep current)"
+        },
+        "data_description": {
+          "site_id": "Numeric ID from the monitoring URL: .../s/XXXXXXX/...",
+          "device_id": "After replacing the controller, enter the new ID here.",
+          "cookie": "Paste the full Cookie header value. Leave blank to keep the existing cookie."
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to the SolarEdge API. Check your internet connection.",
-      "invalid_auth": "Cookie is invalid or has expired. Please copy a fresh cookie from your browser.",
-      "invalid_response": "Unexpected API response. Verify that Site ID and Device ID are correct.",
+      "cannot_connect": "Cannot connect to the SolarEdge portal. Check your internet connection and try again later.",
+      "invalid_auth": "Login rejected: wrong email/password, or the cookie is invalid or expired.",
+      "invalid_response": "Unexpected answer from SolarEdge. Check Site ID and Device ID.",
       "already_configured": "Another entry already uses this combination of Site ID and Device ID.",
+      "cookie_required": "Please paste a cookie.",
+      "password_required": "Please enter the password.",
       "unknown": "An unexpected error occurred. Check the Home Assistant logs for details."
     },
     "abort": {
       "already_configured": "This SolarEdge Hot Water Controller is already configured.",
+      "no_devices": "No hot water controller (load device) was found on this site.",
+      "reauth_successful": "Login renewed. The integration has been reloaded.",
       "reconfigure_successful": "Configuration updated. The integration has been reloaded."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "SolarEdge HWC – Update configuration",
-        "description": "Update the cookie when it has expired, or change **Site ID** and **Device ID** if the controller was replaced. The entities keep their entity IDs and their history.\n\n**How to get a fresh cookie:**\n1. Open [monitoring.solaredge.com](https://monitoring.solaredge.com) in your browser\n2. Press F12 → Network tab → click any request\n3. In the request headers, copy the full `Cookie:` value\n\nLeave the cookie field empty to keep the current cookie.",
+        "title": "SolarEdge HWC – options",
+        "description": "Login, Site ID and Device ID are changed via **Reconfigure** in the three-dot menu of the integration entry.",
         "data": {
-          "site_id": "Site ID",
-          "device_id": "Device ID",
-          "cookie": "New browser cookie (leave blank to keep current)",
           "scan_interval": "Update interval (seconds)",
-          "timeout": "Request timeout (seconds)"
+          "timeout": "Request timeout (seconds)",
+          "switch_off_mode": "When the 'Manual heating' switch is turned off"
         },
         "data_description": {
-          "site_id": "Numeric ID from the monitoring URL: .../site/XXXXXXX/...",
-          "device_id": "Numeric device ID. After replacing the controller, enter the new ID here.",
-          "cookie": "Paste the full Cookie header value. Leave blank to keep the existing cookie.",
-          "scan_interval": "How often to poll the API (min. 30 s, recommended 60 s)",
-          "timeout": "Max. seconds to wait for an API response"
+          "scan_interval": "How often to poll SolarEdge (min. 30 s, recommended 60 s)",
+          "timeout": "Max. seconds to wait for an answer",
+          "switch_off_mode": "Return to automatic mode, or keep the heating element switched off manually"
         }
       }
+    }
+  },
+  "selector": {
+    "switch_off_mode": {
+      "options": {
+        "auto": "Return to automatic mode",
+        "off": "Stay off (manual)"
+      }
     },
-    "error": {
-      "cannot_connect": "Cannot connect to SolarEdge API with the provided data.",
-      "invalid_auth": "The cookie is invalid or expired. Please copy a fresh cookie from your browser.",
-      "invalid_response": "Unexpected API response. Verify that Site ID and Device ID are correct.",
-      "already_configured": "Another entry already uses this combination of Site ID and Device ID.",
-      "unknown": "An unexpected error occurred. Check the Home Assistant logs."
+    "operation_mode": {
+      "options": {
+        "auto": "Automatic",
+        "on": "On",
+        "off": "Off",
+        "schedule": "Schedule"
+      }
     }
   },
   "entity": {
@@ -87,14 +152,54 @@
       "heating_level": {
         "name": "Heating level"
       },
+      "water_temperature": {
+        "name": "Water temperature"
+      },
       "activation_mode": {
-        "name": "Activation mode"
+        "name": "Activation mode",
+        "state": {
+          "auto": "Automatic",
+          "manual": "Manual",
+          "schedule": "Schedule",
+          "smart_energy": "Smart Energy",
+          "off": "Off"
+        }
+      },
+      "auto_off_reason": {
+        "name": "Reason heating is off",
+        "state": {
+          "pending_excess_solar": "Waiting for excess solar power"
+        }
+      },
+      "schedule_type": {
+        "name": "Schedule type",
+        "state": {
+          "excess_pv": "Excess solar power"
+        }
       },
       "device_status": {
-        "name": "Device status"
+        "name": "Device status",
+        "state": {
+          "active": "Active",
+          "online": "Online",
+          "offline": "Offline",
+          "connected": "Connected",
+          "disconnected": "Disconnected",
+          "error": "Error",
+          "communication_error": "Communication error"
+        }
+      },
+      "rated_power": {
+        "name": "Rated power"
       },
       "total_energy": {
         "name": "Total energy"
+      },
+      "next_schedule": {
+        "name": "Next scheduled start"
+      },
+      "boost_end": {
+        "name": "Manual heating until"
       }
     },
     "binary_sensor": {
@@ -103,6 +208,103 @@
       },
       "device_online": {
         "name": "Device online"
+      },
+      "excess_pv": {
+        "name": "Excess solar heating"
+      },
+      "schedule_enabled": {
+        "name": "Schedule enabled"
+      }
+    },
+    "select": {
+      "operation_mode": {
+        "name": "Operating mode",
+        "state": {
+          "auto": "Automatic",
+          "on": "On",
+          "off": "Off",
+          "schedule": "Schedule"
+        }
+      }
+    },
+    "switch": {
+      "manual_heating": {
+        "name": "Manual heating"
+      }
+    },
+    "number": {
+      "manual_level": {
+        "name": "Manual heating level"
+      },
+      "boost_duration": {
+        "name": "Boost duration"
+      }
+    },
+    "button": {
+      "boost": {
+        "name": "Boost"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "SolarEdge rejected the login. Please log in again via the repair notice."
+    },
+    "update_failed": {
+      "message": "Error reading data from SolarEdge: {error}"
+    },
+    "command_failed": {
+      "message": "SolarEdge did not accept the command: {error}"
+    },
+    "invalid_mode": {
+      "message": "Unknown operating mode: {mode}"
+    },
+    "entry_not_loaded": {
+      "message": "The SolarEdge HWC entry {entry_id} is not loaded."
+    },
+    "entry_required": {
+      "message": "Several (or no) SolarEdge HWC entries are loaded. Please choose the controller."
+    }
+  },
+  "services": {
+    "set_operation_mode": {
+      "name": "Set operating mode",
+      "description": "Switches the hot water controller to automatic, on, off or schedule. 'On' can be limited in level and duration.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Controller",
+          "description": "Integration entry of the controller. Only needed with several controllers."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "New operating mode."
+        },
+        "level": {
+          "name": "Level",
+          "description": "Heating level in percent for 'On'. Default: the 'Manual heating level' setting."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Minutes after which the controller returns to its previous mode ('On' only). Empty: until changed."
+        }
+      }
+    },
+    "boost": {
+      "name": "Boost",
+      "description": "Heats for a limited time, then returns to the previous mode.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Controller",
+          "description": "Integration entry of the controller. Only needed with several controllers."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Minutes. Default: the 'Boost duration' setting."
+        },
+        "level": {
+          "name": "Level",
+          "description": "Heating level in percent. Default: the 'Manual heating level' setting."
+        }
       }
     }
   }
