@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  # Manual start: tags the current master with the manifest version
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,17 +16,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check manifest version
+      - name: Determine tag
         run: |
           manifest=$(jq -r .version custom_components/solaredge_hwc/manifest.json)
-          if [ "v${manifest}" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match manifest version ${manifest}"
-            exit 1
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+            if [ "v${manifest}" != "${tag}" ]; then
+              echo "Tag ${tag} does not match manifest version ${manifest}"
+              exit 1
+            fi
+          else
+            if [ "${GITHUB_REF_NAME}" != "master" ]; then
+              echo "Manual releases are only made from master"
+              exit 1
+            fi
+            tag="v${manifest}"
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" > /dev/null; then
+              echo "Tag ${tag} already exists"
+              exit 1
+            fi
           fi
+          echo "TAG=${tag}" >> "$GITHUB_ENV"
 
       - name: Extract release notes
         run: |
-          awk -v tag="${GITHUB_REF_NAME}" '
+          awk -v tag="${TAG}" '
             $0 == "## " tag { found = 1; next }
             found && /^## / { exit }
             found { print }
@@ -33,6 +49,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.TAG }}
           body_path: release_notes.md
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.TAG, '-') }}
