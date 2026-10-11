@@ -13,8 +13,13 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .api import CookieAuth, OAuthAuth, SolarEdgeAuth, SolarEdgeHWCClient
@@ -32,6 +37,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import SolarEdgeHWCCoordinator
+from .limiter import STORAGE_VERSION, TemperatureLimiter, storage_key
 from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,6 +61,7 @@ class SolarEdgeHWCRuntimeData:
     """Objects that live as long as the config entry is loaded."""
 
     coordinator: SolarEdgeHWCCoordinator
+    limiter: TemperatureLimiter
 
 
 type SolarEdgeHWCConfigEntry = ConfigEntry[SolarEdgeHWCRuntimeData]
@@ -122,7 +129,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry)
     # Raises ConfigEntryNotReady / ConfigEntryAuthFailed as appropriate
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = SolarEdgeHWCRuntimeData(coordinator=coordinator)
+    limiter = TemperatureLimiter(hass, entry, coordinator)
+    await limiter.async_start()
+
+    entry.runtime_data = SolarEdgeHWCRuntimeData(coordinator=coordinator, limiter=limiter)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -130,6 +140,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry)
 async def async_unload_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry) -> bool:
     """Unload a config entry."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete the stored limiter state and its repair issue."""
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
+    ir.async_delete_issue(hass, DOMAIN, f"temperature_unavailable_{entry.entry_id}")
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

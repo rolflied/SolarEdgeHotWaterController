@@ -70,6 +70,12 @@
         "state": {
           "on": "mdi:calendar-check"
         }
+      },
+      "temperature_limit_active": {
+        "default": "mdi:thermometer",
+        "state": {
+          "on": "mdi:thermometer-alert"
+        }
       }
     },
     "select": {
@@ -88,6 +94,12 @@
         "default": "mdi:water-boiler-off",
         "state": {
           "on": "mdi:water-boiler"
+        }
+      },
+      "temperature_limit": {
+        "default": "mdi:thermometer-off",
+        "state": {
+          "on": "mdi:thermometer-check"
         }
       }
     },

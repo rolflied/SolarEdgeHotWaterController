@@ -25,6 +25,7 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = entry.runtime_data.coordinator
+    limiter = entry.runtime_data.limiter
     data = coordinator.data
     return {
         "entry": {
@@ -32,6 +33,14 @@ async def async_get_config_entry_diagnostics(
             "options": dict(entry.options),
         },
         "last_update_success": coordinator.last_update_success,
+        "temperature_limit": {
+            "enabled": limiter.enabled,
+            "target": limiter.target,
+            "hysteresis": limiter.hysteresis,
+            "held_from": limiter.held_from,
+            "temperature": limiter.temperature,
+            "source": limiter.source,
+        },
         "state": data.state if data else None,
         "info": async_redact_data(data.info, TO_REDACT) if data else None,
     }

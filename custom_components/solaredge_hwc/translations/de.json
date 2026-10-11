@@ -116,12 +116,16 @@
         "data": {
           "scan_interval": "Aktualisierungsintervall (Sekunden)",
           "timeout": "Zeitlimit für Anfragen (Sekunden)",
-          "switch_off_mode": "Wenn der Schalter „Manuell heizen“ ausgeschaltet wird"
+          "switch_off_mode": "Wenn der Schalter „Manuell heizen“ ausgeschaltet wird",
+          "temperature_sensor": "Ersatz-Temperatursensor",
+          "hysteresis": "Hysterese der Temperaturbegrenzung"
         },
         "data_description": {
           "scan_interval": "Wie oft SolarEdge abgefragt wird (mind. 30 s, empfohlen 60 s)",
           "timeout": "Maximale Wartezeit auf eine Antwort in Sekunden",
-          "switch_off_mode": "Zurück in den Automatikbetrieb oder den Heizstab manuell ausgeschaltet lassen"
+          "switch_off_mode": "Zurück in den Automatikbetrieb oder den Heizstab manuell ausgeschaltet lassen",
+          "temperature_sensor": "Wird für die Temperaturbegrenzung und den Warmwasserbereiter genutzt, wenn der Controller keine Wassertemperatur meldet. Leer lassen, wenn nicht benötigt.",
+          "hysteresis": "Nach Erreichen der Grenze wird wieder geheizt, sobald das Wasser um diesen Wert kühler als der Sollwert ist"
         }
       }
     }
@@ -212,6 +216,9 @@
       },
       "schedule_enabled": {
         "name": "Zeitplan aktiviert"
+      },
+      "temperature_limit_active": {
+        "name": "Temperaturgrenze erreicht"
       }
     },
     "select": {
@@ -228,6 +235,9 @@
     "switch": {
       "manual_heating": {
         "name": "Manuell heizen"
+      },
+      "temperature_limit": {
+        "name": "Temperaturbegrenzung"
       }
     },
     "water_heater": {
@@ -252,6 +262,12 @@
       "boost": {
         "name": "Boost"
       }
+    }
+  },
+  "issues": {
+    "temperature_unavailable": {
+      "title": "Keine Wassertemperatur für {entry}",
+      "description": "Die Temperaturbegrenzung ist eingeschaltet, aber weder der Controller noch der Ersatzsensor ({sensor}) liefert eine Wassertemperatur. Der Controller wurde in seine vorherige Betriebsart zurückgesetzt und wird nicht begrenzt, bis wieder eine Temperatur vorliegt.\n\nSensor prüfen, in den Optionen der Integration einen anderen wählen oder die Temperaturbegrenzung ausschalten."
     }
   },
   "exceptions": {

@@ -116,12 +116,16 @@
         "data": {
           "scan_interval": "Update interval (seconds)",
           "timeout": "Request timeout (seconds)",
-          "switch_off_mode": "When the 'Manual heating' switch is turned off"
+          "switch_off_mode": "When the 'Manual heating' switch is turned off",
+          "temperature_sensor": "Fallback temperature sensor",
+          "hysteresis": "Temperature limit hysteresis"
         },
         "data_description": {
           "scan_interval": "How often to poll SolarEdge (min. 30 s, recommended 60 s)",
           "timeout": "Max. seconds to wait for an answer",
-          "switch_off_mode": "Return to automatic mode, or keep the heating element switched off manually"
+          "switch_off_mode": "Return to automatic mode, or keep the heating element switched off manually",
+          "temperature_sensor": "Used for the temperature limit and the water heater when the controller reports no water temperature. Leave empty if not needed.",
+          "hysteresis": "After the limit was reached, heating resumes once the water is this much cooler than the target"
         }
       }
     }
@@ -212,6 +216,9 @@
       },
       "schedule_enabled": {
         "name": "Schedule enabled"
+      },
+      "temperature_limit_active": {
+        "name": "Temperature limit reached"
       }
     },
     "select": {
@@ -228,6 +235,9 @@
     "switch": {
       "manual_heating": {
         "name": "Manual heating"
+      },
+      "temperature_limit": {
+        "name": "Temperature limit"
       }
     },
     "water_heater": {
@@ -252,6 +262,12 @@
       "boost": {
         "name": "Boost"
       }
+    }
+  },
+  "issues": {
+    "temperature_unavailable": {
+      "title": "No water temperature for {entry}",
+      "description": "The temperature limit is on, but neither the controller nor the fallback sensor ({sensor}) reports a water temperature. The controller has been returned to its previous mode and is not limited until a temperature is available again.\n\nCheck the sensor, choose another one in the integration options, or turn off the temperature limit."
     }
   },
   "exceptions": {

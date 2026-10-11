@@ -28,6 +28,8 @@ CONF_COOKIE: Final = "cookie"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 CONF_TIMEOUT: Final = "timeout"
 CONF_SWITCH_OFF_MODE: Final = "switch_off_mode"
+CONF_TEMPERATURE_SENSOR: Final = "temperature_sensor"
+CONF_HYSTERESIS: Final = "hysteresis"
 
 AUTH_CREDENTIALS: Final = "credentials"
 AUTH_COOKIE: Final = "cookie"
@@ -100,6 +102,14 @@ HEATING_POWER_THRESHOLD_W: Final = 10.0
 DEFAULT_BOOST_DURATION_MIN: Final = 60
 DEFAULT_MANUAL_LEVEL: Final = 100
 MAX_BOOST_DURATION_MIN: Final = 1440
+
+# Temperature limit (°C / K)
+DEFAULT_TARGET_TEMPERATURE: Final = 60.0
+MIN_TARGET_TEMPERATURE: Final = 30.0
+MAX_TARGET_TEMPERATURE: Final = 85.0
+DEFAULT_HYSTERESIS: Final = 5.0
+MIN_HYSTERESIS: Final = 1.0
+MAX_HYSTERESIS: Final = 20.0
 
 # Power readings further apart than this are not integrated into energy
 MAX_ENERGY_INTEGRATION_GAP: Final = timedelta(minutes=15)

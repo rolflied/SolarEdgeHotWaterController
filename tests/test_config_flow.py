@@ -175,7 +175,13 @@ async def test_options_flow(
     with patch("homeassistant.config_entries.ConfigEntries.async_schedule_reload") as reload:
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            {CONF_SCAN_INTERVAL: 120, CONF_TIMEOUT: 15, CONF_SWITCH_OFF_MODE: "off"},
+            {
+                CONF_SCAN_INTERVAL: 120,
+                CONF_TIMEOUT: 15,
+                CONF_SWITCH_OFF_MODE: "off",
+                "temperature_sensor": "sensor.boiler",
+                "hysteresis": 4,
+            },
         )
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -183,5 +189,7 @@ async def test_options_flow(
         CONF_SCAN_INTERVAL: 120,
         CONF_TIMEOUT: 15,
         CONF_SWITCH_OFF_MODE: "off",
+        "temperature_sensor": "sensor.boiler",
+        "hysteresis": 4.0,
     }
     reload.assert_called_once()

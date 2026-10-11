@@ -8,6 +8,7 @@ from typing import Any
 
 import probatio as vol
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorDeviceClass
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -18,6 +19,8 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -43,17 +46,22 @@ from .const import (
     CONF_AUTH_TYPE,
     CONF_COOKIE,
     CONF_DEVICE_ID,
+    CONF_HYSTERESIS,
     CONF_SCAN_INTERVAL,
     CONF_SITE_ID,
     CONF_SWITCH_OFF_MODE,
+    CONF_TEMPERATURE_SENSOR,
     CONF_TIMEOUT,
+    DEFAULT_HYSTERESIS,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SWITCH_OFF_MODE,
     DEFAULT_TIMEOUT,
     DOMAIN,
     ENTRY_TITLE_FORMAT,
+    MAX_HYSTERESIS,
     MAX_SCAN_INTERVAL,
     MAX_TIMEOUT,
+    MIN_HYSTERESIS,
     MIN_SCAN_INTERVAL,
     MIN_TIMEOUT,
     SWITCH_OFF_AUTO,
@@ -466,13 +474,16 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(
-                data={
-                    CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
-                    CONF_TIMEOUT: int(user_input[CONF_TIMEOUT]),
-                    CONF_SWITCH_OFF_MODE: user_input[CONF_SWITCH_OFF_MODE],
-                }
-            )
+            options: dict[str, Any] = {
+                CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
+                CONF_TIMEOUT: int(user_input[CONF_TIMEOUT]),
+                CONF_SWITCH_OFF_MODE: user_input[CONF_SWITCH_OFF_MODE],
+                CONF_HYSTERESIS: float(user_input[CONF_HYSTERESIS]),
+            }
+            # Clearing the field removes the fallback sensor
+            if sensor := user_input.get(CONF_TEMPERATURE_SENSOR):
+                options[CONF_TEMPERATURE_SENSOR] = sensor
+            return self.async_create_entry(data=options)
 
         options = self.config_entry.options
         return self.async_show_form(
@@ -510,6 +521,26 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                             options=[SWITCH_OFF_AUTO, SWITCH_OFF_OFF],
                             translation_key=CONF_SWITCH_OFF_MODE,
                             mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_TEMPERATURE_SENSOR,
+                        description={"suggested_value": options.get(CONF_TEMPERATURE_SENSOR)},
+                    ): EntitySelector(
+                        EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN, device_class=SensorDeviceClass.TEMPERATURE
+                        )
+                    ),
+                    vol.Required(
+                        CONF_HYSTERESIS,
+                        default=options.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=MIN_HYSTERESIS,
+                            max=MAX_HYSTERESIS,
+                            step=0.5,
+                            unit_of_measurement="K",
+                            mode=NumberSelectorMode.BOX,
                         )
                     ),
                 }

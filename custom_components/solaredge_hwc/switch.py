@@ -18,6 +18,7 @@ from .const import (
     SWITCH_OFF_OFF,
 )
 from .entity import SolarEdgeHWCEntity
+from .limiter import TemperatureLimiter
 
 PARALLEL_UPDATES = 1
 
@@ -33,7 +34,8 @@ async def async_setup_entry(
             HWCManualHeatingSwitch(
                 entry.runtime_data.coordinator,
                 entry.options.get(CONF_SWITCH_OFF_MODE, DEFAULT_SWITCH_OFF_MODE),
-            )
+            ),
+            HWCTemperatureLimitSwitch(entry.runtime_data.coordinator, entry.runtime_data.limiter),
         ]
     )
 
@@ -69,3 +71,46 @@ class HWCManualHeatingSwitch(SolarEdgeHWCEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop heating manually."""
         await self.coordinator.async_set_operation_mode(self._off_operation)
+
+
+class HWCTemperatureLimitSwitch(SolarEdgeHWCEntity, SwitchEntity):
+    """
+    Turns the temperature limit on or off.
+
+    The target is set on the water heater entity. Only available when a
+    water temperature is known, from the controller or the fallback sensor.
+    """
+
+    def __init__(self, coordinator, limiter: TemperatureLimiter) -> None:
+        """Initialize the switch."""
+        super().__init__(
+            coordinator,
+            SwitchEntityDescription(key="temperature_limit", translation_key="temperature_limit"),
+        )
+        self._limiter = limiter
+
+    @property
+    def available(self) -> bool:
+        """Without a water temperature there is nothing to limit."""
+        return super().available and self._limiter.has_temperature_source
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the limit is on."""
+        return self._limiter.enabled
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the limit itself."""
+        return {
+            "target_temperature": self._limiter.target,
+            "hysteresis": self._limiter.hysteresis,
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the limit on."""
+        await self._limiter.async_set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the limit off; a held controller returns to its mode."""
+        await self._limiter.async_set_enabled(False)

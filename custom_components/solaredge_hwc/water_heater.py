@@ -9,14 +9,21 @@ from homeassistant.components.water_heater import (
     WaterHeaterEntityDescription,
     WaterHeaterEntityFeature,
 )
-from homeassistant.const import UnitOfTemperature
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SolarEdgeHWCConfigEntry
-from .const import OPERATION_AUTO, OPERATION_MODES, OPERATION_OFF
+from .const import (
+    MAX_TARGET_TEMPERATURE,
+    MIN_TARGET_TEMPERATURE,
+    OPERATION_AUTO,
+    OPERATION_MODES,
+    OPERATION_OFF,
+)
 from .coordinator import SolarEdgeHWCCoordinator
 from .entity import SolarEdgeHWCEntity
+from .limiter import TemperatureLimiter
 
 PARALLEL_UPDATES = 1
 
@@ -31,30 +38,40 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the water heater entity."""
-    async_add_entities([HWCWaterHeater(entry.runtime_data.coordinator)])
+    async_add_entities([HWCWaterHeater(entry.runtime_data.coordinator, entry.runtime_data.limiter)])
 
 
 class HWCWaterHeater(SolarEdgeHWCEntity, WaterHeaterEntity):
     """
-    Operating mode and water temperature in one entity.
+    Operating mode, water temperature and temperature limit in one entity.
 
-    SolarEdge offers no target temperature, so none can be set. Turning the
-    entity on returns the controller to automatic mode, turning it off keeps
-    the heating element off until another mode is chosen.
+    The target temperature is enforced by Home Assistant (see limiter.py):
+    setting it turns the temperature limit on. Turning the entity on returns
+    the controller to automatic mode, turning it off keeps the heating
+    element off until another mode is chosen.
     """
 
     _attr_name = None
     _attr_operation_list = OPERATION_MODES
-    _attr_supported_features = (
-        WaterHeaterEntityFeature.OPERATION_MODE | WaterHeaterEntityFeature.ON_OFF
-    )
+    _attr_min_temp = MIN_TARGET_TEMPERATURE
+    _attr_max_temp = MAX_TARGET_TEMPERATURE
+    _attr_target_temperature_step = 1
 
-    def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator, limiter: TemperatureLimiter) -> None:
         """Initialize the entity."""
         super().__init__(
             coordinator,
             WaterHeaterEntityDescription(key="water_heater", translation_key="hwc"),
         )
+        self._limiter = limiter
+
+    @property
+    def supported_features(self) -> WaterHeaterEntityFeature:
+        """Offer a target temperature only if a water temperature is available."""
+        features = WaterHeaterEntityFeature.OPERATION_MODE | WaterHeaterEntityFeature.ON_OFF
+        if self._limiter.has_temperature_source:
+            features |= WaterHeaterEntityFeature.TARGET_TEMPERATURE
+        return features
 
     if _NATIVE_TEMPERATURE:
         _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
@@ -62,7 +79,12 @@ class HWCWaterHeater(SolarEdgeHWCEntity, WaterHeaterEntity):
         @property
         def native_current_temperature(self) -> float | None:
             """Return the water temperature."""
-            return self.hwc.temperature
+            return self._limiter.temperature
+
+        @property
+        def native_target_temperature(self) -> float | None:
+            """Return the temperature limit."""
+            return self._target_temperature()
 
     else:
         _attr_temperature_unit = UnitOfTemperature.CELSIUS
@@ -70,7 +92,30 @@ class HWCWaterHeater(SolarEdgeHWCEntity, WaterHeaterEntity):
         @property
         def current_temperature(self) -> float | None:
             """Return the water temperature."""
-            return self.hwc.temperature
+            return self._limiter.temperature
+
+        @property
+        def target_temperature(self) -> float | None:
+            """Return the temperature limit."""
+            return self._target_temperature()
+
+    def _target_temperature(self) -> float | None:
+        if not self._limiter.has_temperature_source:
+            return None
+        return self._limiter.target
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Tell whether the limit is on and where the temperature comes from."""
+        return {
+            "temperature_limit": self._limiter.enabled,
+            "temperature_limit_active": self._limiter.active,
+            "temperature_source": self._limiter.source,
+        }
+
+    async def async_set_temperature(self, **kwargs: Any) -> None:
+        """Set the temperature limit and turn it on."""
+        await self._limiter.async_set_target(float(kwargs[ATTR_TEMPERATURE]))
 
     @property
     def current_operation(self) -> str | None:

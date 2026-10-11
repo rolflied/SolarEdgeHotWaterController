@@ -60,7 +60,9 @@ The cookie expires after some time. Home Assistant then shows a **repair notice*
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| *(device name)* | water heater | Operating mode and water temperature for the thermostat card. On = automatic, Off = heating element off. No target temperature (SolarEdge offers none) |
+| *(device name)* | water heater | Operating mode, water temperature and target temperature (temperature limit, see below) for the thermostat card. On = automatic, Off = heating element off |
+| Temperature limit | switch | Turns the temperature limit on or off |
+| Temperature limit reached | binary sensor | On while the limit keeps the heating element off |
 | Operating mode | select | Automatic / On / Off / Schedule |
 | Manual heating | switch | On = heat manually at the *Manual heating level*. Off = back to automatic (or stay off, see options) |
 | Boost | button | Heat at the *Manual heating level* for the *Boost duration*, then return to the previous mode |
@@ -77,6 +79,17 @@ The cookie expires after some time. Home Assistant then shows a **repair notice*
 | Heating active | binary sensor | Heating element is on |
 | Device online, Excess solar heating, Schedule enabled | binary sensor (diagnostic) | |
 | Device status, Schedule type, Rated power | sensor (diagnostic) | |
+
+### Temperature limit
+
+SolarEdge offers no target temperature, so Home Assistant can enforce an upper limit:
+
+- Set the target on the water heater entity (thermostat card or `water_heater.set_temperature`); this also turns the limit on. The *Temperature limit* switch turns it off again.
+- While the controller heats on its own (*Automatic* or *Schedule*) and the water reaches the target, it is switched off manually. Once the water is cooler than target − hysteresis (option, default 5 K), the previous mode is restored. Excess solar power is not used above the target.
+- Manual heating, *On* and boosts are explicit requests and are not limited. Changing the mode by hand while the limit holds the controller off ends the hold.
+- The water temperature comes from the controller. If it reports none, the **fallback temperature sensor** chosen in the options is used (any Home Assistant temperature sensor, °F is converted).
+- If no temperature is available while the limit is on, the controller returns to its previous mode and a repair notice explains why.
+- The limit keeps its state across restarts. Commands sent by the limit are at least 60 s apart.
 
 ### Actions
 
@@ -116,7 +129,7 @@ Schedules and the excess-PV setting can only be read; SolarEdge offers no known 
 
 ## Options and changing the configuration
 
-- **Configure** (options): update interval (30–600 s, default 60), request timeout, and what the *Manual heating* switch does when turned off.
+- **Configure** (options): update interval (30–600 s, default 60), request timeout, what the *Manual heating* switch does when turned off, the fallback temperature sensor and the hysteresis of the temperature limit.
 - **Reconfigure** (three-dot menu): switch between password and cookie login, change account, cookie, Site ID or Device ID. Empty password/cookie fields keep the stored value. Everything is checked against the API before it is saved.
 
 ### After replacing the controller
@@ -172,6 +185,16 @@ Voraussetzung ist Home Assistant **2026.10** oder neuer.
 - Aktionen `solaredge_hwc.set_operation_mode` und `solaredge_hwc.boost` für Automatisierungen, z. B. „30 Minuten mit 50 % heizen“. Ziel ist die Warmwasserbereiter-Entität bzw. das Gerät.
 
 Zeitpläne und die PV-Überschuss-Einstellung lassen sich nur lesen.
+
+### Temperaturbegrenzung
+
+SolarEdge kennt keine Solltemperatur, deshalb kann Home Assistant eine Obergrenze durchsetzen:
+
+- Den Sollwert an der Warmwasserbereiter-Entität setzen (Thermostatkarte oder `water_heater.set_temperature`); damit ist die Begrenzung eingeschaltet. Der Schalter *Temperaturbegrenzung* schaltet sie wieder aus.
+- Heizt der Controller selbstständig (*Automatik* oder *Zeitplan*) und erreicht das Wasser den Sollwert, wird er manuell ausgeschaltet. Ist das Wasser um die Hysterese (Option, Standard 5 K) abgekühlt, kehrt er in die vorherige Betriebsart zurück. Über dem Sollwert wird also auch kein PV-Überschuss mehr verheizt.
+- Manuelles Heizen, *Ein* und Boost werden nicht begrenzt. Wer die Betriebsart während der Begrenzung von Hand ändert, beendet sie.
+- Die Wassertemperatur kommt vom Controller. Meldet er keine, wird der in den Optionen gewählte **Ersatz-Temperatursensor** genutzt (jeder HA-Temperatursensor, °F wird umgerechnet).
+- Fehlt bei eingeschalteter Begrenzung jede Temperatur, kehrt der Controller in die vorherige Betriebsart zurück und ein Reparaturhinweis erklärt den Grund.
 
 ### Energie-Dashboard
 

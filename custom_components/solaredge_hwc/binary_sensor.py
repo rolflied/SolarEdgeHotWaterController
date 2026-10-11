@@ -18,6 +18,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import SolarEdgeHWCConfigEntry
 from .coordinator import HWCData
 from .entity import SolarEdgeHWCEntity
+from .limiter import TemperatureLimiter
 
 PARALLEL_UPDATES = 0
 
@@ -71,7 +72,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up SolarEdge HWC binary sensors."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(HWCBinarySensor(coordinator, description) for description in BINARY_SENSORS)
+    async_add_entities(
+        [
+            *(HWCBinarySensor(coordinator, description) for description in BINARY_SENSORS),
+            HWCTemperatureLimitActive(coordinator, entry.runtime_data.limiter),
+        ]
+    )
 
 
 class HWCBinarySensor(SolarEdgeHWCEntity, BinarySensorEntity):
@@ -90,3 +96,22 @@ class HWCBinarySensor(SolarEdgeHWCEntity, BinarySensorEntity):
         if self.entity_description.attrs_fn is None:
             return None
         return self.entity_description.attrs_fn(self.hwc)
+
+
+class HWCTemperatureLimitActive(SolarEdgeHWCEntity, BinarySensorEntity):
+    """On while the temperature limit keeps the heating element off."""
+
+    def __init__(self, coordinator, limiter: TemperatureLimiter) -> None:
+        """Initialize the binary sensor."""
+        super().__init__(
+            coordinator,
+            BinarySensorEntityDescription(
+                key="temperature_limit_active", translation_key="temperature_limit_active"
+            ),
+        )
+        self._limiter = limiter
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the limit holds the controller off."""
+        return self._limiter.active
