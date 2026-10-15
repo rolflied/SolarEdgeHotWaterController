@@ -19,6 +19,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
     NumberSelector,
@@ -46,6 +47,8 @@ from .const import (
     CONF_AUTH_TYPE,
     CONF_COOKIE,
     CONF_DEVICE_ID,
+    CONF_EVCC,
+    CONF_EVCC_MODE_ENTITY,
     CONF_HYSTERESIS,
     CONF_SCAN_INTERVAL,
     CONF_SITE_ID,
@@ -67,6 +70,7 @@ from .const import (
     SWITCH_OFF_AUTO,
     SWITCH_OFF_OFF,
 )
+from .evcc import evcc_charger_config, find_mode_entities, is_mode_entity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -471,28 +475,53 @@ class SolarEdgeHWCConfigFlow(ConfigFlow, domain=DOMAIN):
 class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
     """Polling and behaviour settings; the entry reloads when they change."""
 
+    def __init__(self) -> None:
+        """Initialize the flow."""
+        self._options: dict[str, Any] = {}
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             options: dict[str, Any] = {
                 CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
                 CONF_TIMEOUT: int(user_input[CONF_TIMEOUT]),
                 CONF_SWITCH_OFF_MODE: user_input[CONF_SWITCH_OFF_MODE],
                 CONF_HYSTERESIS: float(user_input[CONF_HYSTERESIS]),
+                CONF_EVCC: bool(user_input.get(CONF_EVCC, False)),
             }
             # Clearing the field removes the fallback sensor
             if sensor := user_input.get(CONF_TEMPERATURE_SENSOR):
                 options[CONF_TEMPERATURE_SENSOR] = sensor
-            return self.async_create_entry(data=options)
+            if mode_entity := user_input.get(CONF_EVCC_MODE_ENTITY):
+                options[CONF_EVCC_MODE_ENTITY] = mode_entity
 
-        options = self.config_entry.options
+            if options[CONF_EVCC]:
+                if not mode_entity:
+                    errors[CONF_EVCC_MODE_ENTITY] = "evcc_entity_required"
+                elif not is_mode_entity(self.hass, mode_entity):
+                    errors[CONF_EVCC_MODE_ENTITY] = "evcc_entity_invalid"
+            if not errors:
+                self._options = options
+                if options[CONF_EVCC]:
+                    return await self.async_step_evcc()
+                return self.async_create_entry(data=options)
+
+        values: dict[str, Any] = {**self.config_entry.options, **(user_input or {})}
+        if (
+            CONF_EVCC_MODE_ENTITY not in values
+            and len(candidates := find_mode_entities(self.hass)) == 1
+        ):
+            # A single evcc loadpoint: suggest its mode entity
+            values[CONF_EVCC_MODE_ENTITY] = candidates[0]
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Required(
                         CONF_SCAN_INTERVAL,
-                        default=options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                        default=values.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
                     ): NumberSelector(
                         NumberSelectorConfig(
                             min=MIN_SCAN_INTERVAL,
@@ -503,7 +532,7 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                         )
                     ),
                     vol.Required(
-                        CONF_TIMEOUT, default=options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+                        CONF_TIMEOUT, default=values.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
                     ): NumberSelector(
                         NumberSelectorConfig(
                             min=MIN_TIMEOUT,
@@ -515,7 +544,7 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                     ),
                     vol.Required(
                         CONF_SWITCH_OFF_MODE,
-                        default=options.get(CONF_SWITCH_OFF_MODE, DEFAULT_SWITCH_OFF_MODE),
+                        default=values.get(CONF_SWITCH_OFF_MODE, DEFAULT_SWITCH_OFF_MODE),
                     ): SelectSelector(
                         SelectSelectorConfig(
                             options=[SWITCH_OFF_AUTO, SWITCH_OFF_OFF],
@@ -525,7 +554,7 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                     ),
                     vol.Optional(
                         CONF_TEMPERATURE_SENSOR,
-                        description={"suggested_value": options.get(CONF_TEMPERATURE_SENSOR)},
+                        description={"suggested_value": values.get(CONF_TEMPERATURE_SENSOR)},
                     ): EntitySelector(
                         EntitySelectorConfig(
                             domain=SENSOR_DOMAIN, device_class=SensorDeviceClass.TEMPERATURE
@@ -533,7 +562,7 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                     ),
                     vol.Required(
                         CONF_HYSTERESIS,
-                        default=options.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS),
+                        default=values.get(CONF_HYSTERESIS, DEFAULT_HYSTERESIS),
                     ): NumberSelector(
                         NumberSelectorConfig(
                             min=MIN_HYSTERESIS,
@@ -543,6 +572,27 @@ class SolarEdgeHWCOptionsFlow(OptionsFlowWithReload):
                             mode=NumberSelectorMode.BOX,
                         )
                     ),
+                    vol.Required(
+                        CONF_EVCC, default=values.get(CONF_EVCC, False)
+                    ): BooleanSelector(),
+                    vol.Optional(
+                        CONF_EVCC_MODE_ENTITY,
+                        description={"suggested_value": values.get(CONF_EVCC_MODE_ENTITY)},
+                    ): EntitySelector(EntitySelectorConfig(domain=["select", "input_select"])),
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_evcc(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Show the configuration to enter in evcc, then save."""
+        if user_input is not None:
+            return self.async_create_entry(data=self._options)
+        return self.async_show_form(
+            step_id="evcc",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "config": evcc_charger_config(self.hass, self.config_entry),
+                "mode_entity": self._options[CONF_EVCC_MODE_ENTITY],
+            },
         )

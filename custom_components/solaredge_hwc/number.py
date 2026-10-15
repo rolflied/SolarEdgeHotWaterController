@@ -11,16 +11,23 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.number import (
+    NumberDeviceClass,
     NumberEntityDescription,
     NumberMode,
     RestoreNumber,
 )
-from homeassistant.const import EntityCategory, UnitOfRatio, UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfElectricCurrent, UnitOfRatio, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SolarEdgeHWCConfigEntry
-from .const import DEFAULT_BOOST_DURATION_MIN, DEFAULT_MANUAL_LEVEL, MAX_BOOST_DURATION_MIN
+from .const import (
+    DEFAULT_BOOST_DURATION_MIN,
+    DEFAULT_MANUAL_LEVEL,
+    EVCC_CURRENT_KEY,
+    EVCC_MAX_CURRENT,
+    MAX_BOOST_DURATION_MIN,
+)
 from .coordinator import SolarEdgeHWCCoordinator
 from .entity import SolarEdgeHWCEntity
 
@@ -70,7 +77,12 @@ async def async_setup_entry(
 ) -> None:
     """Set up the setting numbers."""
     coordinator = entry.runtime_data.coordinator
-    async_add_entities(HWCSettingNumber(coordinator, description) for description in NUMBERS)
+    entities: list[RestoreNumber] = [
+        HWCSettingNumber(coordinator, description) for description in NUMBERS
+    ]
+    if entry.runtime_data.evcc is not None:
+        entities.append(HWCEvccCurrentNumber(coordinator))
+    async_add_entities(entities)
 
 
 class HWCSettingNumber(SolarEdgeHWCEntity, RestoreNumber):
@@ -104,4 +116,48 @@ class HWCSettingNumber(SolarEdgeHWCEntity, RestoreNumber):
         """Store a new value."""
         self._attr_native_value = value
         self.entity_description.set_fn(self.coordinator, int(value))
+        self.async_write_ha_state()
+
+
+class HWCEvccCurrentNumber(SolarEdgeHWCEntity, RestoreNumber):
+    """
+    Current entity required by the Home Assistant charger of evcc.
+
+    SolarEdge regulates the power itself, so the value has no effect; it is
+    only kept so evcc reads back what it wrote.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
+    _attr_device_class = NumberDeviceClass.CURRENT
+    _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
+    _attr_native_min_value = 0
+    _attr_native_max_value = EVCC_MAX_CURRENT
+    _attr_native_step = 0.1
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator) -> None:
+        """Initialize the number."""
+        super().__init__(
+            coordinator,
+            NumberEntityDescription(key=EVCC_CURRENT_KEY, translation_key=EVCC_CURRENT_KEY),
+        )
+        self._attr_native_value = 0
+
+    @property
+    def available(self) -> bool:
+        """A placeholder can always be set."""
+        return True
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last value."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_number_data()) is not None and (
+            last.native_value is not None
+        ):
+            self._attr_native_value = min(max(last.native_value, 0), EVCC_MAX_CURRENT)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Store the value evcc sent."""
+        self._attr_native_value = value
         self.async_write_ha_state()

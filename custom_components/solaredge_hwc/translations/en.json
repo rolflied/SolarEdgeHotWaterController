@@ -118,16 +118,28 @@
           "timeout": "Request timeout (seconds)",
           "switch_off_mode": "When the 'Manual heating' switch is turned off",
           "temperature_sensor": "Fallback temperature sensor",
-          "hysteresis": "Temperature limit hysteresis"
+          "hysteresis": "Temperature limit hysteresis",
+          "evcc": "evcc connection",
+          "evcc_mode_entity": "evcc loadpoint mode"
         },
         "data_description": {
           "scan_interval": "How often to poll SolarEdge (min. 30 s, recommended 60 s)",
           "timeout": "Max. seconds to wait for an answer",
           "switch_off_mode": "Return to automatic mode, or keep the heating element switched off manually",
           "temperature_sensor": "Used for the temperature limit and the water heater when the controller reports no water temperature. Leave empty if not needed.",
-          "hysteresis": "After the limit was reached, heating resumes once the water is this much cooler than the target"
+          "hysteresis": "After the limit was reached, heating resumes once the water is this much cooler than the target",
+          "evcc": "Let evcc choose the operating mode: Off → off, Smart → automatic (SolarEdge uses the excess itself), Now → on at 100 %. evcc does not change the power.",
+          "evcc_mode_entity": "Select entity with the mode of the evcc loadpoint of this controller, e.g. from the ha-evcc integration (options off / smart / now)"
         }
+      },
+      "evcc": {
+        "title": "Configuration for evcc",
+        "description": "The controller now follows **{mode_entity}**.\n\nAdd the controller to evcc under *Configuration → Charging & heating → Add → Home Assistant → Charger* and choose the entities below, or paste this into evcc.yaml. Under *Advanced* turn on *heating* and *integrated device*.\n\n```yaml\n{config}\n```\n\nEnable switch and current are placeholders required by evcc; they have no effect. The configuration is also part of the diagnostics download."
       }
+    },
+    "error": {
+      "evcc_entity_required": "Choose the entity with the evcc loadpoint mode",
+      "evcc_entity_invalid": "This entity does not offer the evcc modes off, smart (or pv) and now"
     }
   },
   "selector": {
@@ -202,6 +214,13 @@
       },
       "boost_end": {
         "name": "Manual heating until"
+      },
+      "evcc_status": {
+        "name": "evcc status",
+        "state": {
+          "connected": "Ready",
+          "charging": "Heating"
+        }
       }
     },
     "binary_sensor": {
@@ -238,6 +257,9 @@
       },
       "temperature_limit": {
         "name": "Temperature limit"
+      },
+      "evcc_enable": {
+        "name": "evcc enable (placeholder)"
       }
     },
     "water_heater": {
@@ -256,6 +278,9 @@
       },
       "boost_duration": {
         "name": "Boost duration"
+      },
+      "evcc_current": {
+        "name": "evcc current (placeholder)"
       }
     },
     "button": {
@@ -268,6 +293,14 @@
     "temperature_unavailable": {
       "title": "No water temperature for {entry}",
       "description": "The temperature limit is on, but neither the controller nor the fallback sensor ({sensor}) reports a water temperature. The controller has been returned to its previous mode and is not limited until a temperature is available again.\n\nCheck the sensor, choose another one in the integration options, or turn off the temperature limit."
+    },
+    "evcc_mode_unavailable": {
+      "title": "No evcc mode for {entry}",
+      "description": "The evcc loadpoint mode ({entity}) has been unavailable for more than 10 minutes. The controller keeps its current mode; a running *on* from evcc ends on its own after at most 15 minutes.\n\nCheck evcc and the ha-evcc integration, or choose another entity in the integration options."
+    },
+    "evcc_excess_pv_disabled": {
+      "title": "Excess solar heating is off for {entry}",
+      "description": "The evcc connection maps *Smart* to the automatic mode of the controller, which only heats with excess solar power if this is enabled. Turn on excess solar heating for the controller in the SolarEdge app."
     }
   },
   "exceptions": {

@@ -191,5 +191,6 @@ async def test_options_flow(
         CONF_SWITCH_OFF_MODE: "off",
         "temperature_sensor": "sensor.boiler",
         "hysteresis": 4.0,
+        "evcc": False,
     }
     reload.assert_called_once()
