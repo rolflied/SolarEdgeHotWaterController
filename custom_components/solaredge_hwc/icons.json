@@ -50,6 +50,12 @@
           "40": "mdi:thermometer",
           "60": "mdi:thermometer-high"
         }
+      },
+      "evcc_status": {
+        "default": "mdi:ev-station",
+        "state": {
+          "charging": "mdi:water-boiler"
+        }
       }
     },
     "binary_sensor": {
@@ -101,6 +107,9 @@
         "state": {
           "on": "mdi:thermometer-check"
         }
+      },
+      "evcc_enable": {
+        "default": "mdi:toggle-switch-variant"
       }
     },
     "number": {
@@ -114,6 +123,9 @@
       },
       "boost_duration": {
         "default": "mdi:timer-outline"
+      },
+      "evcc_current": {
+        "default": "mdi:current-ac"
       }
     },
     "button": {

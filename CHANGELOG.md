@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.1.0-beta.1
+
+### New
+
+- **evcc connection** (beta, off by default): the controller follows the mode of an evcc loadpoint, read from a select entity of the ha-evcc integration. Off → off, Smart (`pv` / `minpv` before evcc 0.315) → automatic, so SolarEdge keeps regulating the excess itself, Now → on at 100 %. evcc does not change the power.
+  - Commands only on a change of the evcc mode, at most one per minute; a mode chosen by hand is kept until the next change in evcc.
+  - *Now* runs for 15 minutes and is renewed every 10 minutes while evcc reports it, so the controller falls back on its own if evcc or Home Assistant goes away.
+  - Entities for the Home Assistant charger of evcc with fixed entity IDs: `sensor.solaredge_hwc_evcc_status` (`connected` / `charging`) and the placeholders `switch.solaredge_hwc_evcc_enable` and `number.solaredge_hwc_evcc_current` (hidden, no effect).
+  - The options show the evcc configuration with the actual entity IDs; it is also part of the diagnostics.
+  - Repair notices when the evcc mode is unavailable for more than 10 minutes and when excess solar heating is off in the SolarEdge app.
+
 ## v2.0.0
 
 Complete rework. **Requires Home Assistant 2026.10 or newer.**

@@ -13,6 +13,7 @@ The integration UI is available in **English** (default) and **German**.
 - **Control**: water heater entity for the thermostat card, operating mode (Automatic / On / Off / Schedule), manual heating switch, boost with adjustable duration and level
 - **Actions** `solaredge_hwc.set_operation_mode` and `solaredge_hwc.boost` for automations, e.g. "heat for 30 minutes at 50 %"
 - Login with **username and password** (token renewed automatically) or with a **browser cookie**
+- **evcc connection** (beta): evcc chooses the operating mode (Off / Smart / Now), SolarEdge keeps regulating the excess itself
 - Automatic device discovery, reauthentication when the login expires, reconfiguration after a hardware swap, diagnostics download
 
 ## Prerequisites
@@ -127,9 +128,68 @@ All commands go to `PUT /services/m/api/homeautomation/v1.0/{site}/devices/{devi
 
 Schedules and the excess-PV setting can only be read; SolarEdge offers no known endpoint to change them.
 
+## evcc (beta)
+
+SolarEdge regulates the excess solar power on its own. With the evcc connection, [evcc](https://evcc.io) only chooses the operating mode; it does not change the power:
+
+| evcc loadpoint mode | Controller |
+|---------------------|------------|
+| Off (`off`) | Off (`MANUAL`, level 0) |
+| Smart (`smart`, before evcc 0.315 `pv` / `minpv`) | Automatic – SolarEdge heats with excess solar power |
+| Now (`now`) | On at 100 % |
+
+- Commands are only sent when the evcc mode changes (at most one per minute). A mode chosen by hand in Home Assistant or the SolarEdge app is kept until the next change in evcc.
+- *Now* runs for 15 minutes and is renewed every 10 minutes while evcc still reports `now`. If evcc, ha-evcc or Home Assistant goes away, the controller returns to its previous mode on its own.
+- If the evcc mode is unavailable for more than 10 minutes, a repair notice appears. Another one appears if excess solar heating is off in the SolarEdge app, because *Smart* would then not heat with excess power.
+
+### Requirements
+
+- evcc 0.315 or newer (older versions with `pv` / `minpv` work as well), with an external URL set so evcc can log in to Home Assistant
+- The [ha-evcc](https://github.com/marq24/ha-evcc) integration, which provides the mode of each evcc loadpoint as a select entity
+- Excess solar heating enabled in the SolarEdge app
+
+### Setup
+
+1. In evcc, add the controller under *Configuration → Charging & heating → Add → Home Assistant → Charger*. Use the entities below and turn on *heating* and *integrated device* under *Advanced*. Give it a lower priority than a wallbox, so evcc offers the excess to the wallbox first; SolarEdge then backs off on its own.
+2. Reload ha-evcc so it creates the mode entity of the new loadpoint.
+3. In the options of this integration, turn on **evcc connection** and choose that mode entity (suggested if there is only one). The last page shows the evcc configuration with the actual entity IDs; it is also part of the diagnostics.
+
+| evcc parameter | Entity |
+|----------------|--------|
+| `status` | `sensor.solaredge_hwc_evcc_status` (`connected` / `charging`) |
+| `enabled`, `enable` | `switch.solaredge_hwc_evcc_enable` (placeholder, hidden) |
+| `setMaxCurrent` | `number.solaredge_hwc_evcc_current` (placeholder, hidden) |
+| `power` | *Power* sensor |
+| `energy` | *Total energy* sensor |
+
+evcc requires an enable switch and a current entity. Here they only remember what evcc set and have **no effect** on the controller. For the same reason evcc plans do not work with this loadpoint. The status sensor shows the applied evcc mode in its attributes (`evcc_mode`, `applied_operation`, `override`).
+
+```yaml
+chargers:
+  - name: hot_water
+    type: template
+    template: homeassistant
+    uri: http://homeassistant.local:8123
+    status: sensor.solaredge_hwc_evcc_status
+    enabled: switch.solaredge_hwc_evcc_enable
+    enable: switch.solaredge_hwc_evcc_enable
+    setMaxCurrent: number.solaredge_hwc_evcc_current
+    power: sensor.solaredge_hot_water_controller_power
+    energy: sensor.solaredge_hot_water_controller_total_energy
+    heating: true
+    integrateddevice: true
+
+loadpoints:
+  - title: Hot water
+    charger: hot_water
+    mode: smart
+    phases: 1
+    priority: 0
+```
+
 ## Options and changing the configuration
 
-- **Configure** (options): update interval (30–600 s, default 60), request timeout, what the *Manual heating* switch does when turned off, the fallback temperature sensor and the hysteresis of the temperature limit.
+- **Configure** (options): update interval (30–600 s, default 60), request timeout, what the *Manual heating* switch does when turned off, the fallback temperature sensor, the hysteresis of the temperature limit and the evcc connection.
 - **Reconfigure** (three-dot menu): switch between password and cookie login, change account, cookie, Site ID or Device ID. Empty password/cookie fields keep the stored value. Everything is checked against the API before it is saved.
 
 ### After replacing the controller
@@ -199,6 +259,28 @@ SolarEdge kennt keine Solltemperatur, deshalb kann Home Assistant eine Obergrenz
 - Manuelles Heizen, *Ein* und Boost werden nicht begrenzt. Wer die Betriebsart während der Begrenzung von Hand ändert, beendet sie.
 - Die Wassertemperatur kommt vom Controller. Meldet er keine, wird der in den Optionen gewählte **Ersatz-Temperatursensor** genutzt (jeder HA-Temperatursensor, °F wird umgerechnet).
 - Fehlt bei eingeschalteter Begrenzung jede Temperatur, kehrt der Controller in die vorherige Betriebsart zurück und ein Reparaturhinweis erklärt den Grund.
+
+### evcc (Beta)
+
+SolarEdge regelt den PV-Überschuss selbst. evcc wählt mit der evcc-Anbindung nur die Betriebsart und verändert die Leistung nicht:
+
+| evcc-Modus | Controller |
+|------------|------------|
+| Aus | Aus (`MANUAL`, Level 0) |
+| Smart (vor evcc 0.315: PV / Min+PV) | Automatik – SolarEdge heizt mit Überschuss |
+| Schnell (`now`) | Ein mit 100 % |
+
+- Gesendet wird nur, wenn sich der evcc-Modus ändert (höchstens ein Befehl pro Minute). Eine Betriebsart, die von Hand in Home Assistant oder in der SolarEdge-App gewählt wurde, bleibt bis zur nächsten Änderung in evcc bestehen.
+- *Schnell* läuft 15 Minuten und wird alle 10 Minuten erneuert, solange evcc `now` meldet. Fallen evcc, ha-evcc oder Home Assistant aus, kehrt der Controller von selbst in die vorherige Betriebsart zurück.
+- Voraussetzungen: evcc ab 0.315 (ältere Versionen gehen auch), die Integration [ha-evcc](https://github.com/marq24/ha-evcc) und in der SolarEdge-App eingeschaltetes Überschussheizen.
+
+Einrichtung:
+
+1. In evcc unter *Konfiguration → Laden & Heizen → Hinzufügen → Home Assistant → Wallbox* anlegen: Status `sensor.solaredge_hwc_evcc_status`, Freigabe (lesen und schalten) `switch.solaredge_hwc_evcc_enable`, Strom `number.solaredge_hwc_evcc_current`, dazu die Sensoren *Leistung* und *Gesamtenergie*. Unter *Erweitert* *Heizen* und *Integriertes Gerät* einschalten. Priorität niedriger als die Wallbox wählen.
+2. ha-evcc neu laden, damit die Modus-Entität des neuen Ladepunkts entsteht.
+3. In den Optionen dieser Integration **evcc-Anbindung** einschalten und die Modus-Entität wählen. Die letzte Seite zeigt die fertige evcc-Konfiguration mit den tatsächlichen Entitäts-IDs (auch im Diagnose-Download).
+
+Freigabe und Strom verlangt evcc zwingend. Hier merken sie sich nur den Wert und haben **keine Wirkung** auf den Controller. Deshalb wirken auch evcc-Pläne bei diesem Ladepunkt nicht.
 
 ### Energie-Dashboard
 

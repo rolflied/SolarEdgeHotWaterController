@@ -37,6 +37,14 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import SolarEdgeHWCCoordinator
+from .evcc import (
+    EvccModeFollower,
+    async_register_evcc_entities,
+    async_remove_evcc_entities,
+    evcc_enabled,
+    excess_pv_issue_id,
+    unavailable_issue_id,
+)
 from .limiter import STORAGE_VERSION, TemperatureLimiter, storage_key
 from .services import async_setup_services
 
@@ -62,6 +70,8 @@ class SolarEdgeHWCRuntimeData:
 
     coordinator: SolarEdgeHWCCoordinator
     limiter: TemperatureLimiter
+    # Only while the evcc connection is switched on
+    evcc: EvccModeFollower | None = None
 
 
 type SolarEdgeHWCConfigEntry = ConfigEntry[SolarEdgeHWCRuntimeData]
@@ -132,7 +142,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry)
     limiter = TemperatureLimiter(hass, entry, coordinator)
     await limiter.async_start()
 
-    entry.runtime_data = SolarEdgeHWCRuntimeData(coordinator=coordinator, limiter=limiter)
+    evcc: EvccModeFollower | None = None
+    if evcc_enabled(entry):
+        async_register_evcc_entities(hass, entry)
+        evcc = EvccModeFollower(hass, entry, coordinator)
+        await evcc.async_start()
+    else:
+        async_remove_evcc_entities(hass, entry)
+
+    entry.runtime_data = SolarEdgeHWCRuntimeData(
+        coordinator=coordinator, limiter=limiter, evcc=evcc
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -143,9 +163,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: SolarEdgeHWCConfigEntry
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Delete the stored limiter state and its repair issue."""
+    """Delete the stored limiter state and the repair issues."""
     await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
     ir.async_delete_issue(hass, DOMAIN, f"temperature_unavailable_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, unavailable_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, excess_pv_issue_id(entry.entry_id))
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

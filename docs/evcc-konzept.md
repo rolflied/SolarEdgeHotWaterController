@@ -1,6 +1,6 @@
 # Konzept: Anbindung an evcc
 
-Stand: 15.10.2026. Geprüft gegen evcc **0.317.1** (aktuelles Release) und den
+Stand: 15.10.2026, umgesetzt in v2.1.0-beta.1. Geprüft gegen evcc **0.317.1** (aktuelles Release) und den
 `master`-Zweig von evcc-io/evcc, die Integration **ha-evcc** (marq24/ha-evcc)
 2026.10.4 sowie Home Assistant **2026.10** (Mindestversion dieser Integration).
 
@@ -187,7 +187,7 @@ trotzdem lesen und schreiben.
   der Entity-Registry.
 - README-Abschnitt „evcc“ mit Schritt-für-Schritt-Anleitung.
 
-Beispiel (Entity-IDs beispielhaft):
+Beispiel (die evcc-Entitäten haben feste IDs; Leistung und Energie je nach Gerätename):
 
 ```yaml
 chargers:
@@ -195,10 +195,10 @@ chargers:
     type: template
     template: homeassistant
     uri: http://homeassistant.local:8123
-    status: sensor.solaredge_hot_water_controller_evcc_status
-    enabled: switch.solaredge_hot_water_controller_evcc_enable
-    enable: switch.solaredge_hot_water_controller_evcc_enable
-    setMaxCurrent: number.solaredge_hot_water_controller_evcc_current
+    status: sensor.solaredge_hwc_evcc_status
+    enabled: switch.solaredge_hwc_evcc_enable
+    enable: switch.solaredge_hwc_evcc_enable
+    setMaxCurrent: number.solaredge_hwc_evcc_current
     power: sensor.solaredge_hot_water_controller_power
     energy: sensor.solaredge_hot_water_controller_total_energy
     heating: true

@@ -30,6 +30,8 @@ CONF_TIMEOUT: Final = "timeout"
 CONF_SWITCH_OFF_MODE: Final = "switch_off_mode"
 CONF_TEMPERATURE_SENSOR: Final = "temperature_sensor"
 CONF_HYSTERESIS: Final = "hysteresis"
+CONF_EVCC: Final = "evcc"
+CONF_EVCC_MODE_ENTITY: Final = "evcc_mode_entity"
 
 AUTH_CREDENTIALS: Final = "credentials"
 AUTH_COOKIE: Final = "cookie"
@@ -120,3 +122,41 @@ SERVICE_BOOST: Final = "boost"
 ATTR_MODE: Final = "mode"
 ATTR_LEVEL: Final = "level"
 ATTR_DURATION: Final = "duration"
+
+# ---------------------------------------------------------------------------
+# evcc
+# ---------------------------------------------------------------------------
+# Loadpoint modes as reported by evcc (and the ha-evcc select entity).
+# "pv" and "minpv" are the names used before evcc 0.315.
+EVCC_MODE_OFF: Final = "off"
+EVCC_MODE_SMART: Final = "smart"
+EVCC_MODE_NOW: Final = "now"
+EVCC_MODE_PV: Final = "pv"
+EVCC_MODE_MINPV: Final = "minpv"
+EVCC_MODE_OPERATIONS: Final = {
+    EVCC_MODE_OFF: OPERATION_OFF,
+    EVCC_MODE_SMART: OPERATION_AUTO,
+    EVCC_MODE_PV: OPERATION_AUTO,
+    EVCC_MODE_MINPV: OPERATION_AUTO,
+    EVCC_MODE_NOW: OPERATION_ON,
+}
+# Level used for the evcc mode "now"
+EVCC_ON_LEVEL: Final = 100
+# "On" runs for a limited time and is renewed while evcc still wants it, so
+# the controller falls back on its own if evcc or Home Assistant goes away
+EVCC_ON_DURATION: Final = timedelta(minutes=15)
+EVCC_RENEW_INTERVAL: Final = timedelta(minutes=10)
+# Commands sent on behalf of evcc are at least this far apart
+EVCC_MIN_COMMAND_INTERVAL: Final = timedelta(seconds=60)
+# A repair issue appears once the evcc mode has been unavailable this long
+EVCC_UNAVAILABLE_ISSUE_DELAY: Final = timedelta(minutes=10)
+# Range of the placeholder current entity required by evcc
+EVCC_MAX_CURRENT: Final = 32
+
+# Keys and fixed object IDs of the entities evcc reads and writes
+EVCC_STATUS_KEY: Final = "evcc_status"
+EVCC_ENABLE_KEY: Final = "evcc_enable"
+EVCC_CURRENT_KEY: Final = "evcc_current"
+# Status values evcc understands without extra configuration
+EVCC_STATUS_CONNECTED: Final = "connected"
+EVCC_STATUS_CHARGING: Final = "charging"

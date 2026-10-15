@@ -5,13 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import SolarEdgeHWCConfigEntry
 from .const import (
     CONF_SWITCH_OFF_MODE,
     DEFAULT_SWITCH_OFF_MODE,
+    EVCC_ENABLE_KEY,
     OPERATION_AUTO,
     OPERATION_OFF,
     OPERATION_ON,
@@ -28,16 +31,17 @@ async def async_setup_entry(
     entry: SolarEdgeHWCConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the manual heating switch."""
-    async_add_entities(
-        [
-            HWCManualHeatingSwitch(
-                entry.runtime_data.coordinator,
-                entry.options.get(CONF_SWITCH_OFF_MODE, DEFAULT_SWITCH_OFF_MODE),
-            ),
-            HWCTemperatureLimitSwitch(entry.runtime_data.coordinator, entry.runtime_data.limiter),
-        ]
-    )
+    """Set up the switches."""
+    coordinator = entry.runtime_data.coordinator
+    entities: list[SwitchEntity] = [
+        HWCManualHeatingSwitch(
+            coordinator, entry.options.get(CONF_SWITCH_OFF_MODE, DEFAULT_SWITCH_OFF_MODE)
+        ),
+        HWCTemperatureLimitSwitch(coordinator, entry.runtime_data.limiter),
+    ]
+    if entry.runtime_data.evcc is not None:
+        entities.append(HWCEvccEnableSwitch(coordinator))
+    async_add_entities(entities)
 
 
 class HWCManualHeatingSwitch(SolarEdgeHWCEntity, SwitchEntity):
@@ -114,3 +118,45 @@ class HWCTemperatureLimitSwitch(SolarEdgeHWCEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the limit off; a held controller returns to its mode."""
         await self._limiter.async_set_enabled(False)
+
+
+class HWCEvccEnableSwitch(SolarEdgeHWCEntity, SwitchEntity, RestoreEntity):
+    """
+    Enable switch required by the Home Assistant charger of evcc.
+
+    The controller follows the evcc mode instead, so this switch has no
+    effect. It only reports back what evcc set; evcc would otherwise
+    complain that the charger is out of sync.
+    """
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_visible_default = False
+
+    def __init__(self, coordinator) -> None:
+        """Initialize the switch."""
+        super().__init__(
+            coordinator,
+            SwitchEntityDescription(key=EVCC_ENABLE_KEY, translation_key=EVCC_ENABLE_KEY),
+        )
+        self._attr_is_on = False
+
+    @property
+    def available(self) -> bool:
+        """A placeholder can always be switched."""
+        return True
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last state."""
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_state()) is not None:
+            self._attr_is_on = last.state == "on"
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Remember that evcc enabled the loadpoint."""
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Remember that evcc disabled the loadpoint."""
+        self._attr_is_on = False
+        self.async_write_ha_state()

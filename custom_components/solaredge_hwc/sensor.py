@@ -29,9 +29,16 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import SolarEdgeHWCConfigEntry
-from .const import DOMAIN, MAX_ENERGY_INTEGRATION_GAP
+from .const import (
+    DOMAIN,
+    EVCC_STATUS_CHARGING,
+    EVCC_STATUS_CONNECTED,
+    EVCC_STATUS_KEY,
+    MAX_ENERGY_INTEGRATION_GAP,
+)
 from .coordinator import HWCData, SolarEdgeHWCCoordinator
 from .entity import SolarEdgeHWCEntity
+from .evcc import EvccModeFollower
 
 PARALLEL_UPDATES = 0
 
@@ -188,6 +195,8 @@ async def async_setup_entry(
     entities.append(HWCEnergySensor(coordinator))
     entities.append(HWCNextScheduleSensor(coordinator))
     entities.append(HWCManualUntilSensor(coordinator))
+    if (evcc := entry.runtime_data.evcc) is not None:
+        entities.append(HWCEvccStatusSensor(coordinator, evcc))
     async_add_entities(entities)
 
 
@@ -346,3 +355,34 @@ class HWCManualUntilSensor(SolarEdgeHWCEntity, SensorEntity):
     def native_value(self) -> datetime | None:
         """Return the end time."""
         return self.coordinator.manual_until
+
+
+class HWCEvccStatusSensor(SolarEdgeHWCEntity, SensorEntity):
+    """
+    Charging status for the Home Assistant charger of evcc.
+
+    evcc reads ``connected`` as status B and ``charging`` as status C. The
+    attributes tell which evcc mode was applied to the controller.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [EVCC_STATUS_CONNECTED, EVCC_STATUS_CHARGING]
+    _unrecorded_attributes = frozenset({"last_command", "mode_entity"})
+
+    def __init__(self, coordinator: SolarEdgeHWCCoordinator, evcc: EvccModeFollower) -> None:
+        """Initialize the sensor."""
+        super().__init__(
+            coordinator,
+            SensorEntityDescription(key=EVCC_STATUS_KEY, translation_key=EVCC_STATUS_KEY),
+        )
+        self._evcc = evcc
+
+    @property
+    def native_value(self) -> str:
+        """Return the status in the form evcc expects."""
+        return EVCC_STATUS_CHARGING if self.hwc.heating else EVCC_STATUS_CONNECTED
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose what was done with the evcc mode."""
+        return self._evcc.attributes
